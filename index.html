@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OKR Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> OKR Tracker</h1>
+            <p class="subtitle">Objectives & Key Results</p>
+            <p id="file-status" class="file-status-header"><span class="file-label">FILE:</span> <span id="file-name">No file selected</span></p>
+        </header>
+        <main>
+            <section class="file-controls">
+                <div class="file-buttons">
+                    <button id="btn-add-objective" type="button">+ Add Objective</button>
+                    <button id="btn-open-file">📂 Open File</button>
+                    <button id="btn-new-file">📄 New File</button>
+                    <button id="btn-export-txt">📥 Export Report</button>
+                    <button id="btn-help">❓ What is OKR?</button>
+                </div>
+            </section>
+
+            <section class="dashboard-charts">
+                <div class="chart-container">
+                    <svg class="progress-ring" viewBox="0 0 120 120">
+                        <circle class="ring-bg" cx="60" cy="60" r="52" />
+                        <circle class="ring-progress ring-personal" cx="60" cy="60" r="52" />
+                    </svg>
+                    <div class="chart-center">
+                        <span class="chart-count" id="personal-count">0</span>
+                        <span class="chart-label">Personal</span>
+                    </div>
+                    <div class="chart-percent" id="personal-percent">0%</div>
+                </div>
+                <div class="chart-container">
+                    <svg class="progress-ring" viewBox="0 0 120 120">
+                        <circle class="ring-bg" cx="60" cy="60" r="52" />
+                        <circle class="ring-progress ring-team" cx="60" cy="60" r="52" />
+                    </svg>
+                    <div class="chart-center">
+                        <span class="chart-count" id="team-count">0</span>
+                        <span class="chart-label">Team</span>
+                    </div>
+                    <div class="chart-percent" id="team-percent">0%</div>
+                </div>
+                <div class="chart-container">
+                    <svg class="progress-ring" viewBox="0 0 120 120">
+                        <circle class="ring-bg" cx="60" cy="60" r="52" />
+                        <circle class="ring-progress ring-company" cx="60" cy="60" r="52" />
+                    </svg>
+                    <div class="chart-center">
+                        <span class="chart-count" id="company-count">0</span>
+                        <span class="chart-label">Company</span>
+                    </div>
+                    <div class="chart-percent" id="company-percent">0%</div>
+                </div>
+            </section>
+
+            <section class="objectives-list">
+                <h2>Objectives</h2>
+                <div id="objectives-container"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Data stored in your local JSON file</p>
+        </footer>
+    </div>
+
+    <!-- Modal for OKR Help -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content modal-help">
+            <span class="close" data-modal="help-modal">&times;</span>
+            <h3>📚 What is OKR?</h3>
+            <div class="help-content">
+                <p><strong>OKR</strong> stands for <strong>Objectives and Key Results</strong> — a goal-setting framework used by companies like Google, Intel, and LinkedIn to align teams and track progress.</p>
+                
+                <h4>🎯 Objectives</h4>
+                <p>An Objective is a clearly defined goal that is:</p>
+                <ul>
+                    <li><strong>Qualitative</strong> — Describes what you want to achieve</li>
+                    <li><strong>Inspiring</strong> — Motivates you and your team</li>
+                    <li><strong>Time-bound</strong> — Has a clear deadline (usually quarterly)</li>
+                </ul>
+                <p><em>Example: "Launch a world-class mobile app experience"</em></p>
+                
+                <h4>📊 Key Results</h4>
+                <p>Key Results are measurable outcomes that indicate progress toward the Objective:</p>
+                <ul>
+                    <li><strong>Quantitative</strong> — Include specific numbers or metrics</li>
+                    <li><strong>Measurable</strong> — You can track progress objectively</li>
+                    <li><strong>Challenging</strong> — Stretch goals (70% achievement is often considered success)</li>
+                </ul>
+                <p><em>Example: "Achieve 4.5+ star rating on app stores"</em></p>
+                
+                <h4>⚖️ Weights</h4>
+                <p>Weights help prioritize objectives and key results:</p>
+                <ul>
+                    <li>Objective weights should total 100%</li>
+                    <li>Key Result weights within each objective should total 100%</li>
+                    <li>Higher weight = higher priority/importance</li>
+                </ul>
+                
+                <h4>🏢 Groups</h4>
+                <ul>
+                    <li><strong>Personal</strong> — Individual development goals</li>
+                    <li><strong>Team</strong> — Shared team objectives</li>
+                    <li><strong>Company</strong> — Organization-wide goals</li>
+                </ul>
+                
+                <h4>💡 Tips for Success</h4>
+                <ul>
+                    <li>Keep 3-5 objectives per quarter</li>
+                    <li>Each objective should have 2-5 key results</li>
+                    <li>Review progress weekly</li>
+                    <li>Adjust key results if needed, but avoid changing objectives mid-cycle</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for adding/editing Objectives -->
+    <div id="objective-modal" class="modal">
+        <div class="modal-content modal-wide">
+            <span class="close" data-modal="objective-modal">&times;</span>
+            <h3 id="objective-modal-title">Add Objective</h3>
+            <form id="objective-form">
+                <input type="hidden" id="objective-edit-id">
+                <div class="form-row">
+                    <div class="form-column">
+                        <div class="form-field">
+                            <label>Group</label>
+                            <select id="objective-group" required>
+                                <option value="Personal">Personal</option>
+                                <option value="Team">Team</option>
+                                <option value="Company">Company</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label>Start Date</label>
+                            <input type="date" id="objective-start-date" required>
+                        </div>
+                    </div>
+                    <div class="form-column">
+                        <div class="form-field">
+                            <label>Year</label>
+                            <input type="number" id="objective-year" min="2020" max="2100" required>
+                        </div>
+                        <div class="form-field">
+                            <label>Target Date</label>
+                            <input type="date" id="objective-target-date" required>
+                        </div>
+                    </div>
+                    <div class="form-column">
+                        <div class="form-field">
+                            <label>Quarter</label>
+                            <select id="objective-quarter" required>
+                                <option value="1">Q1</option>
+                                <option value="2">Q2</option>
+                                <option value="3">Q3</option>
+                                <option value="4">Q4</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label>Weight (%)</label>
+                            <input type="number" id="objective-weight" min="0" max="100" value="100" required>
+                            <button type="button" id="btn-balance-objectives" class="btn-small">Balance All</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label>Objective</label>
+                    <textarea id="objective-title" placeholder="Enter your objective..." required rows="3"></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Purpose</label>
+                    <textarea id="objective-purpose" placeholder="Why is this objective important?" rows="2"></textarea>
+                </div>
+                <button type="submit">Save Objective</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for adding Key Results -->
+    <div id="kr-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-modal="kr-modal">&times;</span>
+            <h3 id="kr-modal-title">Add Key Result</h3>
+            <form id="kr-form">
+                <input type="hidden" id="kr-edit-id">
+                <input type="hidden" id="kr-objective-id">
+                <textarea id="kr-title" placeholder="Key Result title..." required rows="3"></textarea>
+                <div class="kr-target">
+                    <label>Target Value:</label>
+                    <input type="number" id="kr-target" value="100" min="1" required>
+                </div>
+                <div class="kr-target">
+                    <label>Weight (%):</label>
+                    <input type="number" id="kr-weight" value="100" min="0" max="100" required>
+                    <button type="button" id="btn-balance-krs" class="btn-small">Balance KRs</button>
+                </div>
+                <div class="kr-dates">
+                    <div class="kr-date-field">
+                        <label>Start Date:</label>
+                        <input type="date" id="kr-start-date" required>
+                    </div>
+                    <div class="kr-date-field">
+                        <label>Target Date:</label>
+                        <input type="date" id="kr-target-date" required>
+                    </div>
+                </div>
+                <button type="submit">Add Key Result</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
