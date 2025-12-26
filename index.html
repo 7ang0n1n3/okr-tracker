@@ -180,6 +180,10 @@
                     <label>Purpose</label>
                     <textarea id="objective-purpose" placeholder="Why is this objective important?" rows="2"></textarea>
                 </div>
+                <div class="form-field">
+                    <label>Last Check-in</label>
+                    <input type="date" id="objective-last-checkin">
+                </div>
                 <button type="submit">Save Objective</button>
             </form>
         </div>
@@ -203,6 +207,14 @@
                     <input type="number" id="kr-weight" value="100" min="0" max="100" required>
                     <button type="button" id="btn-balance-krs" class="btn-small">Balance KRs</button>
                 </div>
+                <div class="form-field">
+                    <label>Status</label>
+                    <select id="kr-status">
+                        <option value="on-track">On Track</option>
+                        <option value="off-track">Off Track</option>
+                        <option value="at-risk">At Risk</option>
+                    </select>
+                </div>
                 <div class="kr-dates">
                     <div class="kr-date-field">
                         <label>Start Date:</label>
@@ -212,6 +224,18 @@
                         <label>Target Date:</label>
                         <input type="date" id="kr-target-date" required>
                     </div>
+                </div>
+                <div class="form-field">
+                    <label>Last Check-in</label>
+                    <input type="date" id="kr-last-checkin">
+                </div>
+                <div class="form-field">
+                    <label>Evidence</label>
+                    <textarea id="kr-evidence" placeholder="Enter evidence or proof of progress..." rows="3"></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Comments</label>
+                    <textarea id="kr-comments" placeholder="Enter any comments or notes..." rows="3"></textarea>
                 </div>
                 <button type="submit">Add Key Result</button>
             </form>

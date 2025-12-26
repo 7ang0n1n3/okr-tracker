@@ -241,8 +241,10 @@ function renderObjectives() {
                             <span class="obj-badge obj-group-${(obj.group || 'Personal').toLowerCase()}">${obj.group || 'Personal'}</span>
                             <span class="obj-badge">${obj.year || ''} Q${obj.quarter || ''}</span>
                             <span class="obj-badge">${obj.weight || 100}%</span>
+                            ${(obj.created || obj.createdAt) ? `<span class="obj-badge">Created<br>${formatDateOnly(obj.created || obj.createdAt)}</span>` : ''}
                             ${obj.startDate ? `<span class="obj-badge">Start Date<br>${obj.startDate}</span>` : ''}
                             ${obj.targetDate ? `<span class="obj-badge">Due Date<br>${obj.targetDate}</span>` : ''}
+                            ${obj.lastCheckin ? `<span class="obj-badge">Last Check-in<br>${obj.lastCheckin}</span>` : ''}
                         </div>
                         <div class="objective-content-box">
                             <label class="box-label">Objective</label>
@@ -256,33 +258,44 @@ function renderObjectives() {
                         <button class="btn-icon btn-delete" onclick="deleteObjective('${obj.id}')" title="Delete">🗑</button>
                     </div>
                 </div>
-                <div class="objective-progress">
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${progress}%"></div>
+                    <div class="objective-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${progress}%; background: ${getProgressColor(progress)}"></div>
+                        </div>
+                        <div class="progress-text">
+                            <span>${obj.keyResults?.length || 0} Key Results</span>
+                            <span>${progress}% Complete</span>
+                        </div>
                     </div>
-                    <div class="progress-text">
-                        <span>${obj.keyResults?.length || 0} Key Results</span>
-                        <span>${progress}% Complete</span>
-                    </div>
-                </div>
                 ${obj.keyResults && obj.keyResults.length > 0 ? `
                     <div class="key-results">
                         <h4>Key Results</h4>
                         <div class="kr-list">
                             ${obj.keyResults.map(kr => {
                                 const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+                                const status = kr.status || 'on-track';
                                 return `
-                                    <div class="kr-item" data-kr-id="${kr.id}">
+                                    <div class="kr-item kr-border-${status}" data-kr-id="${kr.id}">
                                         <div class="kr-info">
-                                            <div class="kr-title">${escapeHtml(kr.title)}</div>
-                                            ${kr.startDate && kr.targetDate ? `<div class="kr-dates-display">Start: ${kr.startDate} → Target: ${kr.targetDate}</div>` : ''}
-                                            <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
+                                            <div class="kr-title-row">
+                                                <div class="kr-title">${escapeHtml(kr.title)}</div>
+                                            </div>
+                                            <div class="kr-meta-row">
+                                                <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
+                                                <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
+                                                ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
+                                                ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
+                                                ${kr.targetDate ? `<span class="kr-meta-item">Target: ${kr.targetDate}</span>` : ''}
+                                                ${kr.lastCheckin ? `<span class="kr-meta-item">Last Check-in: ${kr.lastCheckin}</span>` : ''}
+                                            </div>
                                             <div class="kr-progress-row">
                                                 <div class="kr-progress-bar">
                                                     <div class="kr-progress-fill" style="width: ${krProgress}%"></div>
                                                 </div>
                                                 <span class="kr-value">${kr.current} / ${kr.target}</span>
                                             </div>
+                                            ${kr.evidence ? `<div class="kr-evidence-section"><label class="kr-section-label">Evidence:</label><div class="kr-evidence-content">${escapeHtml(kr.evidence)}</div></div>` : ''}
+                                            ${kr.comments ? `<div class="kr-comments-section"><label class="kr-section-label">Comments:</label><div class="kr-comments-content">${escapeHtml(kr.comments)}</div></div>` : ''}
                                         </div>
                                         <div class="kr-controls">
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease">−</button>
@@ -308,6 +321,44 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Format date to show only date part (YYYY-MM-DD)
+function formatDateOnly(dateString) {
+    if (!dateString) return '';
+    // If it's already in YYYY-MM-DD format, return as is
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dateString;
+    }
+    // If it's an ISO string with time, extract just the date part
+    if (dateString.includes('T')) {
+        return dateString.split('T')[0];
+    }
+    return dateString;
+}
+
+// Get progress bar color based on percentage
+// 0-25%: blue, 26-55%: yellowish, 56-69%: light green, 70-100%: dark green
+function getProgressColor(percentage) {
+    if (percentage <= 25) {
+        return '#3b82f6'; // blue
+    } else if (percentage <= 55) {
+        return '#eab308'; // yellowish
+    } else if (percentage <= 69) {
+        return '#10b981'; // light green
+    } else {
+        return '#059669'; // dark green
+    }
+}
+
+// Get status label from status value
+function getStatusLabel(status) {
+    const labels = {
+        'on-track': 'On Track',
+        'off-track': 'Off Track',
+        'at-risk': 'At Risk'
+    };
+    return labels[status] || 'On Track';
+}
+
 // Open objective modal
 function openObjectiveModal(objectiveId = null) {
     const form = document.getElementById('objective-form');
@@ -327,6 +378,7 @@ function openObjectiveModal(objectiveId = null) {
             document.getElementById('objective-start-date').value = obj.startDate || '';
             document.getElementById('objective-target-date').value = obj.targetDate || '';
             document.getElementById('objective-weight').value = obj.weight || 100;
+            document.getElementById('objective-last-checkin').value = obj.lastCheckin || '';
         }
     } else {
         // Add mode
@@ -431,11 +483,12 @@ async function saveObjective(formData) {
             obj.group = formData.group;
             obj.year = formData.year;
             obj.quarter = formData.quarter;
-            obj.title = formData.title;
-            obj.purpose = formData.purpose;
-            obj.startDate = formData.startDate;
-            obj.targetDate = formData.targetDate;
-            obj.weight = formData.weight;
+        obj.title = formData.title;
+        obj.purpose = formData.purpose;
+        obj.startDate = formData.startDate;
+        obj.targetDate = formData.targetDate;
+        obj.weight = formData.weight;
+        obj.lastCheckin = formData.lastCheckin;
             
             // If weight changed, balance other objectives
             if (oldWeight !== formData.weight) {
@@ -444,6 +497,7 @@ async function saveObjective(formData) {
         }
     } else {
         // Add new
+        const today = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
         data.objectives.push({
             id: generateId(),
             group: formData.group,
@@ -454,8 +508,9 @@ async function saveObjective(formData) {
             startDate: formData.startDate,
             targetDate: formData.targetDate,
             weight: 0, // Will be balanced
+            lastCheckin: formData.lastCheckin,
             keyResults: [],
-            createdAt: new Date().toISOString()
+            createdAt: today
         });
         // Auto-balance all objective weights
         autoBalanceObjectiveWeights();
@@ -478,26 +533,38 @@ function openKRModal(objectiveId, krId = null) {
     document.getElementById('kr-objective-id').value = objectiveId;
     document.getElementById('kr-edit-id').value = krId || '';
     
+    const submitBtn = document.querySelector('#kr-form button[type="submit"]');
+    
     if (krId) {
         // Edit mode
         const objective = data.objectives.find(obj => obj.id === objectiveId);
         const kr = objective?.keyResults?.find(k => k.id === krId);
         if (kr) {
             document.getElementById('kr-modal-title').textContent = 'Edit Key Result';
+            if (submitBtn) submitBtn.textContent = 'Save Key Result';
             document.getElementById('kr-title').value = kr.title;
             document.getElementById('kr-target').value = kr.target;
             document.getElementById('kr-start-date').value = kr.startDate || '';
             document.getElementById('kr-target-date').value = kr.targetDate || '';
             document.getElementById('kr-weight').value = kr.weight || 100;
+            document.getElementById('kr-status').value = kr.status || 'on-track';
+            document.getElementById('kr-last-checkin').value = kr.lastCheckin || '';
+            document.getElementById('kr-evidence').value = kr.evidence || '';
+            document.getElementById('kr-comments').value = kr.comments || '';
         }
     } else {
         // Add mode
         document.getElementById('kr-modal-title').textContent = 'Add Key Result';
+        if (submitBtn) submitBtn.textContent = 'Add Key Result';
         document.getElementById('kr-title').value = '';
         document.getElementById('kr-target').value = '100';
         document.getElementById('kr-start-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('kr-target-date').value = '';
         document.getElementById('kr-weight').value = '100';
+        document.getElementById('kr-status').value = 'on-track';
+        document.getElementById('kr-last-checkin').value = '';
+        document.getElementById('kr-evidence').value = '';
+        document.getElementById('kr-comments').value = '';
     }
     
     document.getElementById('kr-modal').classList.add('active');
@@ -510,7 +577,7 @@ function closeModal(modalId = 'kr-modal') {
 }
 
 // Add or update key result
-async function saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, editId = null) {
+async function saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, status, lastCheckin, evidence, comments, editId = null) {
     const objective = data.objectives.find(obj => obj.id === objectiveId);
     if (objective) {
         if (!objective.keyResults) objective.keyResults = [];
@@ -526,6 +593,10 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
                 kr.startDate = startDate;
                 kr.targetDate = targetDate;
                 kr.weight = parseInt(weight);
+                kr.status = status;
+                kr.lastCheckin = lastCheckin;
+                kr.evidence = evidence;
+                kr.comments = comments;
                 
                 // If weight changed, balance other KRs
                 if (oldWeight !== parseInt(weight)) {
@@ -534,6 +605,7 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
             }
         } else {
             // Add new
+            const today = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
             objective.keyResults.push({
                 id: generateId(),
                 title: title,
@@ -542,7 +614,11 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
                 startDate: startDate,
                 targetDate: targetDate,
                 weight: 0, // Will be balanced
-                createdAt: new Date().toISOString()
+                status: status,
+                lastCheckin: lastCheckin,
+                evidence: evidence,
+                comments: comments,
+                createdAt: today
             });
             // Auto-balance all KR weights for this objective
             autoBalanceKRWeights(objectiveId);
@@ -614,8 +690,11 @@ function exportToText() {
         text += `Group:       ${obj.group || 'Personal'}\n`;
         text += `Period:      ${obj.year || ''} Q${obj.quarter || ''}\n`;
         text += `Weight:      ${obj.weight || 100}%\n`;
+        const createdDate = obj.created || obj.createdAt;
+        text += `Created:     ${createdDate ? formatDateOnly(createdDate) : 'N/A'}\n`;
         text += `Start Date:  ${obj.startDate || 'N/A'}\n`;
         text += `Due Date:    ${obj.targetDate || 'N/A'}\n`;
+        text += `Last Check-in: ${obj.lastCheckin || 'N/A'}\n`;
         text += `Progress:    ${progress}%\n\n`;
         text += `Title:\n${obj.title}\n`;
         if (obj.purpose) {
@@ -624,14 +703,25 @@ function exportToText() {
         
         if (obj.keyResults && obj.keyResults.length > 0) {
             text += '\nKey Results:\n';
-            obj.keyResults.forEach((kr, krIndex) => {
-                const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
-                text += `\n  ${krIndex + 1}. ${kr.title}\n`;
-                text += `     Progress: ${kr.current}/${kr.target} (${krProgress}%)\n`;
-                if (kr.startDate && kr.targetDate) {
-                    text += `     Period: ${kr.startDate} → ${kr.targetDate}\n`;
-                }
-            });
+                obj.keyResults.forEach((kr, krIndex) => {
+                    const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+                    text += `\n  ${krIndex + 1}. ${kr.title}\n`;
+                    text += `     Progress: ${kr.current}/${kr.target} (${krProgress}%)\n`;
+                    text += `     Status: ${getStatusLabel(kr.status || 'on-track')}\n`;
+                    text += `     Weight: ${kr.weight || 100}%\n`;
+                    const krCreatedDate = kr.created || kr.createdAt;
+                    text += `     Created: ${krCreatedDate ? formatDateOnly(krCreatedDate) : 'N/A'}\n`;
+                    if (kr.startDate && kr.targetDate) {
+                        text += `     Period: ${kr.startDate} → ${kr.targetDate}\n`;
+                    }
+                    text += `     Last Check-in: ${kr.lastCheckin || 'N/A'}\n`;
+                    if (kr.evidence) {
+                        text += `     Evidence:\n${kr.evidence.split('\n').map(line => `        ${line}`).join('\n')}\n`;
+                    }
+                    if (kr.comments) {
+                        text += `     Comments:\n${kr.comments.split('\n').map(line => `        ${line}`).join('\n')}\n`;
+                    }
+                });
         }
         
         text += '\n' + '═'.repeat(60) + '\n\n';
@@ -666,7 +756,8 @@ document.getElementById('objective-form').addEventListener('submit', (e) => {
         purpose: document.getElementById('objective-purpose').value.trim(),
         startDate: document.getElementById('objective-start-date').value,
         targetDate: document.getElementById('objective-target-date').value,
-        weight: parseInt(document.getElementById('objective-weight').value)
+        weight: parseInt(document.getElementById('objective-weight').value),
+        lastCheckin: document.getElementById('objective-last-checkin').value
     };
     if (formData.title) {
         saveObjective(formData);
@@ -683,8 +774,12 @@ document.getElementById('kr-form').addEventListener('submit', (e) => {
     const startDate = document.getElementById('kr-start-date').value;
     const targetDate = document.getElementById('kr-target-date').value;
     const weight = document.getElementById('kr-weight').value;
+    const status = document.getElementById('kr-status').value;
+    const lastCheckin = document.getElementById('kr-last-checkin').value;
+    const evidence = document.getElementById('kr-evidence').value.trim();
+    const comments = document.getElementById('kr-comments').value.trim();
     if (title && target && startDate && targetDate) {
-        saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, editId || null);
+        saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, status, lastCheckin, evidence, comments, editId || null);
         closeModal();
     }
 });
