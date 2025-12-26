@@ -194,7 +194,7 @@ h2 {
 
 .file-controls {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
