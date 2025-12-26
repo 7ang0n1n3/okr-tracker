@@ -131,14 +131,49 @@ The application automatically balances weights when you add new objectives or ke
 - **Manual Adjustment**: You can manually set weights, and the remaining weights will be automatically adjusted
 - **Balance Buttons**: Use the "Balance All" button for objectives or "Balance KRs" button for key results to manually redistribute weights equally
 
-## Data Storage
+## Data Storage and Privacy
 
-All data is stored locally in a JSON file on your computer. The application uses the File System Access API to:
-- Save data directly to your chosen file
-- Remember your last opened file
-- Ensure your data remains private and under your control
+### Local File Storage
 
-No data is sent to external servers. Your OKR information stays on your device.
+All OKR data is stored locally in a JSON file on your computer. The application uses the File System Access API to save data directly to your chosen file. Your OKR information never leaves your computer and is never sent to external servers.
+
+**Important**: The JSON file is stored in **unencrypted** format. This means:
+- The file is readable as plain text
+- Anyone with access to the file can read its contents
+- You are responsible for securing the file location and access permissions
+
+### Browser Storage (IndexedDB)
+
+The application uses IndexedDB (a browser storage mechanism) to store a minimal amount of metadata:
+
+**What is stored:**
+- File handle reference: A reference to the last opened JSON file (stored under the key 'okr_last_file' in an IndexedDB database named 'OKRTracker')
+- This is only metadata that helps the application remember which file you last opened
+
+**What is NOT stored:**
+- Your actual OKR data (objectives, key results, progress, etc.)
+- Any personal information beyond the file reference
+- Any data that could be used to reconstruct your OKRs
+
+### What Happens When Browser Cache is Cleared
+
+If you clear your browser's cache or IndexedDB data:
+
+1. **Your OKR data remains safe**: All your objectives, key results, and progress data remain intact in your JSON file on your computer
+2. **File handle is lost**: The application will no longer remember which file you last opened
+3. **Action required**: You will need to manually open your JSON file again using the "Open File" button
+4. **No data loss**: Your actual OKR data is unaffected since it's stored in the file, not in browser storage
+
+### Privacy and Security
+
+- **No network transmission**: The application operates entirely offline and does not send any data over the internet
+- **No cloud storage**: All data remains on your local machine
+- **No tracking**: The application does not collect analytics, usage statistics, or any tracking information
+- **File security**: Since data is stored in an unencrypted JSON file, ensure you:
+  - Store the file in a secure location
+  - Use appropriate file system permissions
+  - Consider encrypting the file or folder if storing sensitive information
+  - Be cautious when sharing the file with others
 
 ## Keyboard Shortcuts
 
