@@ -4,6 +4,7 @@
 const FILE_HANDLE_KEY = 'okr_last_file';
 let fileHandle = null;
 let data = { objectives: [] };
+let selectedGroupFilter = null; // null = show all, 'Personal'/'Team'/'Company' = filter by group
 
 // Check if File System Access API is supported
 const isFileSystemSupported = 'showOpenFilePicker' in window;
@@ -45,6 +46,7 @@ async function openFile() {
         await loadFromFile();
         renderObjectives();
         updateFileStatus(true);
+        setupChartClickHandlers();
         // Store file handle for next session
         await storeFileHandle();
     } catch (e) {
@@ -68,6 +70,7 @@ async function createFile() {
         await saveToFile();
         renderObjectives();
         updateFileStatus(true);
+        setupChartClickHandlers();
         // Store file handle for next session
         await storeFileHandle();
     } catch (e) {
@@ -189,6 +192,32 @@ function updateDashboardCharts() {
     });
 }
 
+// Update filter indicators on chart containers
+function updateFilterIndicators() {
+    const groups = ['Personal', 'Team', 'Company'];
+    groups.forEach(group => {
+        const chartContainer = document.getElementById(`chart-${group.toLowerCase()}`);
+        if (chartContainer) {
+            if (selectedGroupFilter === group) {
+                chartContainer.classList.add('chart-filter-active');
+            } else {
+                chartContainer.classList.remove('chart-filter-active');
+            }
+        }
+    });
+}
+
+// Filter objectives by group
+function filterByGroup(group) {
+    // Toggle: if clicking the same group, clear the filter
+    if (selectedGroupFilter === group) {
+        selectedGroupFilter = null;
+    } else {
+        selectedGroupFilter = group;
+    }
+    renderObjectives();
+}
+
 // Generate unique ID
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -230,8 +259,25 @@ function renderObjectives() {
     }
     
     updateDashboardCharts();
+    updateFilterIndicators();
     
-    container.innerHTML = data.objectives.map(obj => {
+    // Filter objectives based on selected group
+    let filteredObjectives = data.objectives;
+    if (selectedGroupFilter) {
+        filteredObjectives = data.objectives.filter(obj => (obj.group || 'Personal') === selectedGroupFilter);
+    }
+    
+    if (filteredObjectives.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <span>🎯</span>
+                <p>No ${selectedGroupFilter || ''} objectives found.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = filteredObjectives.map(obj => {
         const progress = calculateProgress(obj);
         // Check if objective is past due date or within due date
         const today = new Date();
@@ -816,6 +862,28 @@ document.getElementById('btn-help').addEventListener('click', () => {
     document.getElementById('help-modal').classList.add('active');
 });
 
+// Set up click handlers for chart containers to filter by group
+function setupChartClickHandlers() {
+    const chartContainers = ['chart-personal', 'chart-team', 'chart-company'];
+    chartContainers.forEach(chartId => {
+        const container = document.getElementById(chartId);
+        if (container) {
+            container.style.cursor = 'pointer';
+            // Remove existing event listeners by cloning
+            const newContainer = container.cloneNode(true);
+            container.parentNode.replaceChild(newContainer, container);
+            // Add click handler to the new container
+            const updatedContainer = document.getElementById(chartId);
+            if (updatedContainer) {
+                updatedContainer.addEventListener('click', () => {
+                    const group = updatedContainer.dataset.group;
+                    filterByGroup(group);
+                });
+            }
+        }
+    });
+}
+
 document.querySelectorAll('.close').forEach(btn => {
     btn.addEventListener('click', () => {
         const modalId = btn.dataset.modal || 'kr-modal';
@@ -857,5 +925,9 @@ if (!isFileSystemSupported) {
             renderObjectives();
             updateFileStatus(false);
         }
+        // Set up chart click handlers after initial render
+        setupChartClickHandlers();
     });
+    // Also set up handlers if file is already restored
+    setupChartClickHandlers();
 }
