@@ -287,14 +287,20 @@ function renderObjectives() {
             targetDate.setHours(0, 0, 0, 0);
         }
         const isPastDue = targetDate && targetDate < today;
-        const isWithinDueDate = targetDate && targetDate >= today;
+        const isBeforeOrAtDueDate = targetDate && targetDate >= today;
         
         let overdueClass = '';
         if (isPastDue && progress < 70) {
             // Past due date and progress less than 70% - red outline
             overdueClass = ' objective-overdue';
-        } else if (isWithinDueDate && progress >= 70) {
-            // Within due date and progress 70% or higher - green outline
+        } else if (isPastDue && progress >= 70) {
+            // Past due date and progress 70% or higher - yellow outline
+            overdueClass = ' objective-overdue-yellow';
+        } else if (isBeforeOrAtDueDate && progress >= 70 && progress < 100) {
+            // Before or at due date and progress 70% or higher (but not 100%) - blue outline
+            overdueClass = ' objective-overdue-blue';
+        } else if (isBeforeOrAtDueDate && progress >= 100) {
+            // Before or at due date and progress at 100% - green outline
             overdueClass = ' objective-overdue-complete';
         }
         return `
@@ -340,32 +346,30 @@ function renderObjectives() {
                                 const status = kr.status || 'on-track';
                                 return `
                                     <div class="kr-item kr-border-${status}" data-kr-id="${kr.id}">
-                                        <div class="kr-info">
-                                            <div class="kr-title-row">
-                                                <div class="kr-title">${escapeHtml(kr.title)}</div>
-                                            </div>
-                                            <div class="kr-meta-row">
-                                                <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
-                                                <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
-                                                ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
-                                                ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
-                                                ${kr.targetDate ? `<span class="kr-meta-item">Target: ${kr.targetDate}</span>` : ''}
-                                                ${kr.lastCheckin ? `<span class="kr-meta-item">Last Check-in: ${kr.lastCheckin}</span>` : ''}
-                                            </div>
-                                            <div class="kr-progress-row">
-                                                <div class="kr-progress-bar">
-                                                    <div class="kr-progress-fill" style="width: ${krProgress}%"></div>
-                                                </div>
-                                                <span class="kr-value">${kr.current} / ${kr.target}</span>
-                                            </div>
-                                            ${kr.evidence ? `<div class="kr-evidence-section"><label class="kr-section-label">Evidence:</label><div class="kr-evidence-content">${escapeHtml(kr.evidence)}</div></div>` : ''}
-                                            ${kr.comments ? `<div class="kr-comments-section"><label class="kr-section-label">Comments:</label><div class="kr-comments-content">${escapeHtml(kr.comments)}</div></div>` : ''}
+                                        <div class="kr-info-blocks">
+                                            <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
+                                            <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
+                                            ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
+                                            ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
+                                            ${kr.targetDate ? `<span class="kr-meta-item">Target: ${kr.targetDate}</span>` : ''}
+                                            ${kr.lastCheckin ? `<span class="kr-meta-item">Last Check-in: ${kr.lastCheckin}</span>` : ''}
                                         </div>
                                         <div class="kr-controls">
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease">−</button>
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', 10)" title="Increase">+</button>
                                             <button onclick="openKRModal('${obj.id}', '${kr.id}')" title="Edit">✎</button>
                                             <button class="btn-delete-kr" onclick="deleteKR('${obj.id}', '${kr.id}')" title="Delete">×</button>
+                                        </div>
+                                        <div class="kr-description">
+                                            <div class="kr-title">${escapeHtml(kr.title)}</div>
+                                            ${kr.evidence ? `<div class="kr-evidence-section"><label class="kr-section-label">Evidence:</label><div class="kr-evidence-content">${escapeHtml(kr.evidence)}</div></div>` : ''}
+                                            ${kr.comments ? `<div class="kr-comments-section"><label class="kr-section-label">Comments:</label><div class="kr-comments-content">${escapeHtml(kr.comments)}</div></div>` : ''}
+                                        </div>
+                                        <div class="kr-progress-row">
+                                            <div class="kr-progress-bar">
+                                                <div class="kr-progress-fill" style="width: ${krProgress}%"></div>
+                                            </div>
+                                            <span class="kr-value">${kr.current} / ${kr.target}</span>
                                         </div>
                                     </div>
                                 `;
