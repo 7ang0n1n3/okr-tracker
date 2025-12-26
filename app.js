@@ -233,8 +233,26 @@ function renderObjectives() {
     
     container.innerHTML = data.objectives.map(obj => {
         const progress = calculateProgress(obj);
+        // Check if objective is past due date or within due date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const targetDate = obj.targetDate ? new Date(obj.targetDate) : null;
+        if (targetDate) {
+            targetDate.setHours(0, 0, 0, 0);
+        }
+        const isPastDue = targetDate && targetDate < today;
+        const isWithinDueDate = targetDate && targetDate >= today;
+        
+        let overdueClass = '';
+        if (isPastDue && progress < 70) {
+            // Past due date and progress less than 70% - red outline
+            overdueClass = ' objective-overdue';
+        } else if (isWithinDueDate && progress >= 70) {
+            // Within due date and progress 70% or higher - green outline
+            overdueClass = ' objective-overdue-complete';
+        }
         return `
-            <div class="objective-card" data-id="${obj.id}">
+            <div class="objective-card${overdueClass}" data-id="${obj.id}">
                 <div class="objective-header">
                     <div class="objective-info">
                         <div class="objective-meta">
