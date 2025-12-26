@@ -313,7 +313,7 @@ function renderObjectives() {
                             <span class="obj-badge">${obj.weight || 100}%</span>
                             ${(obj.created || obj.createdAt) ? `<span class="obj-badge">Created<br>${formatDateOnly(obj.created || obj.createdAt)}</span>` : ''}
                             ${obj.startDate ? `<span class="obj-badge">Start Date<br>${obj.startDate}</span>` : ''}
-                            ${obj.targetDate ? `<span class="obj-badge">Due Date<br>${obj.targetDate}</span>` : ''}
+                            ${obj.targetDate ? `<span class="obj-badge${getDateWarningClass(obj.targetDate)}">Due Date<br>${obj.targetDate}</span>` : ''}
                             ${obj.lastCheckin ? `<span class="obj-badge">Last Check-in<br>${obj.lastCheckin}</span>` : ''}
                         </div>
                         <div class="objective-content-box">
@@ -351,8 +351,8 @@ function renderObjectives() {
                                             <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
                                             ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
                                             ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
-                                            ${kr.targetDate ? `<span class="kr-meta-item">Target: ${kr.targetDate}</span>` : ''}
-                                            ${kr.lastCheckin ? `<span class="kr-meta-item">Last Check-in: ${kr.lastCheckin}</span>` : ''}
+                                            ${kr.targetDate ? `<span class="kr-meta-item${getDateWarningClass(kr.targetDate)}">Target: ${kr.targetDate}</span>` : ''}
+                                            ${kr.lastCheckin ? `<span class="kr-meta-item ${isCheckinOverdue(kr.lastCheckin) ? 'kr-checkin-overdue' : ''}">Last Check-in: ${kr.lastCheckin}</span>` : ''}
                                         </div>
                                         <div class="kr-controls">
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease">−</button>
@@ -425,6 +425,38 @@ function getStatusLabel(status) {
         'at-risk': 'At Risk'
     };
     return labels[status] || 'On Track';
+}
+
+// Check if last check-in is 8 days or more ago
+function isCheckinOverdue(checkinDate) {
+    if (!checkinDate) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkin = new Date(checkinDate);
+    checkin.setHours(0, 0, 0, 0);
+    const diffTime = today - checkin;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 8;
+}
+
+// Get date warning class based on target date proximity
+function getDateWarningClass(targetDate) {
+    if (!targetDate) return '';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(targetDate);
+    target.setHours(0, 0, 0, 0);
+    const diffTime = target - today;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+        // Past the target date - red
+        return ' date-warning-red';
+    } else if (diffDays <= 7) {
+        // One week or less left - yellow
+        return ' date-warning-yellow';
+    }
+    return '';
 }
 
 // Open objective modal

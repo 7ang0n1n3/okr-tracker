@@ -124,6 +124,18 @@ Each key result displays a status badge:
 - **Off Track (Yellow)**: Progress is below expectations, needs attention
 - **At Risk (Red)**: Progress is significantly behind, requires immediate action
 
+### Date Warning Colors
+
+Both Objective Due Date badges and Key Result Target Date badges use color coding to indicate urgency:
+
+- **Yellow Badge**: One week (7 days) or less remaining until the target/due date
+  - Indicates the deadline is approaching and requires attention
+
+- **Red Badge**: Past the target/due date
+  - Indicates the deadline has passed and the item is overdue
+
+Additionally, Key Result Last Check-in badges will turn red if 8 days or more have passed since the last check-in date, indicating that the key result needs to be reviewed.
+
 ## Weight Balancing
 
 The application automatically balances weights when you add new objectives or key results:
