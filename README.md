@@ -14,12 +14,15 @@ OKR Tracker is an offline-capable web application that stores your OKR data in a
 - **Three Group Categories**: Organize objectives by Personal, Team, or Company
 - **Progress Tracking**: Visual progress indicators for objectives and key results
 - **Status Management**: Track key results with status indicators (On Track, Off Track, At Risk)
+- **Confidence Levels**: Set confidence levels (Low, Medium, High) for key results to indicate likelihood of achievement
 - **Evidence and Comments**: Document progress with evidence and comments for each key result
 - **Check-in Dates**: Track last check-in dates for objectives and key results
 - **Weight Balancing**: Automatic weight distribution for objectives and key results
 - **Export Reports**: Generate formatted text reports of your OKRs
 - **Filtering**: Click on dashboard charts to filter objectives by group
 - **Color-Coded Status**: Visual indicators for objective progress and due dates
+- **Progress Trends & Analysis**: Visualize progress over time with interactive charts
+- **Change History**: Track all changes to objectives and key results with timestamps and details
 
 ## Browser Requirements
 
@@ -62,6 +65,7 @@ The application will remember your last opened file and attempt to restore it wh
    - **Target Value**: The target number to achieve
    - **Weight (%)**: Priority weight relative to other key results
    - **Status**: On Track, Off Track, or At Risk
+   - **Confidence**: Low, Medium, or High (indicates your confidence in achieving this key result)
    - **Start Date**: When tracking begins
    - **Target Date**: The deadline
    - **Last Check-in**: Optional date of last review
@@ -87,7 +91,54 @@ Click on any of the three dashboard charts (Personal, Team, Company) to filter t
 
 ### Exporting Reports
 
-Click "Export Report" to generate a formatted text file containing all your OKRs with their progress, status, dates, evidence, and comments.
+Click "Export Report" to generate a formatted text file containing all your OKRs with their progress, status, confidence levels, dates, evidence, and comments.
+
+### Viewing Progress Trends
+
+Click "📈 Progress Trends" to visualize your progress over time. The trends feature offers two view modes:
+
+1. **Grouped by Category** (default): Shows one chart with three lines representing the average progress for Personal, Team, and Company objectives over time. This view helps you compare overall progress across different categories. Only groups that currently have objectives are displayed.
+
+2. **Individual Objectives**: Shows separate charts for each objective, allowing you to track individual objective progress. Use the filters to view specific groups or objectives.
+
+**How Progress Tracking Works:**
+- Progress snapshots are automatically recorded whenever you create, update, or modify objectives or key results
+- Each snapshot captures the current progress percentage for all objectives and their key results at that moment
+- If multiple changes occur on the same day, the snapshot for that day is updated (not duplicated)
+- The chart displays a line connecting data points over time, showing how progress changes
+- Data points appear on the chart only when changes occur - if no changes are made for several days, the line will jump from the last data point to the next one
+- Progress data is stored in the history array within your JSON file, ensuring it persists across sessions
+
+**Chart Features:**
+- Interactive tooltips show group, date, progress percentage, and objective count when hovering over data points
+- Color-coded lines: Personal (green), Team (yellow), Company (blue)
+- Legend displays current progress percentage for each group
+- X-axis shows dates, Y-axis shows progress percentage (0-100%)
+
+### Viewing Change History
+
+Click "📊 View History" to see a complete log of all changes made to your OKRs. The history includes:
+
+- **Creation events**: When objectives and key results were created
+- **Updates**: All field changes (title, dates, status, confidence, evidence, comments, etc.)
+- **Progress changes**: When key result progress values are updated
+- **Deletions**: When objectives or key results are removed
+- **Progress snapshots**: Automatic snapshots of progress state (used for trends visualization)
+
+Each entry shows:
+- The type of item (Objective or Key Result)
+- The item's title and group
+- The timestamp of the change
+- The type of change (Created, Updated, Progress, Deleted)
+- Details of what changed (for updates and progress changes)
+
+**History Storage:**
+- All history entries are stored in the `history` array within your JSON file
+- The system keeps the last 1000 history entries to prevent file bloat
+- History data persists across sessions and is included when you export or backup your file
+- Progress snapshots are stored as history entries with type 'progress-snapshot' and contain complete progress data for all objectives at that point in time
+
+Use the filters to view history by item type (Objectives or Key Results) or by group (Personal, Team, Company).
 
 ## Progress Color Coding
 
@@ -118,11 +169,19 @@ The progress bars within objectives use color coding based on completion percent
 
 ### Key Result Status Badges
 
-Each key result displays a status badge:
+Each key result displays several badges:
 
-- **On Track (Green)**: Progress is meeting expectations
-- **Off Track (Yellow)**: Progress is below expectations, needs attention
-- **At Risk (Red)**: Progress is significantly behind, requires immediate action
+- **Status Badge**: Indicates the current state of the key result
+  - **On Track (Green)**: Progress is meeting expectations
+  - **Off Track (Yellow)**: Progress is below expectations, needs attention
+  - **At Risk (Red)**: Progress is significantly behind, requires immediate action
+
+- **Confidence Badge**: Shows your confidence level in achieving the key result
+  - **Low**: Indicates uncertainty or significant challenges ahead
+  - **Medium**: Indicates moderate confidence with some risks
+  - **High**: Indicates strong confidence in achieving the target
+
+- **Weight Badge**: Displays the priority weight percentage for the key result
 
 ### Date Warning Colors
 
@@ -200,8 +259,11 @@ If you clear your browser's cache or IndexedDB data:
 3. **Regular Check-ins**: Update your last check-in dates weekly to maintain accountability
 4. **Use Evidence**: Document your progress with evidence to track what's working
 5. **Review Status**: Regularly update key result status to reflect current reality
-6. **Balance Weights**: Use weight balancing to ensure priorities are clear
-7. **Export Regularly**: Generate reports periodically to review progress and share updates
+6. **Set Confidence Levels**: Use confidence indicators to identify which key results may need more attention
+7. **Balance Weights**: Use weight balancing to ensure priorities are clear
+8. **Track Trends**: Use the Progress Trends feature to identify patterns and trends in your progress over time
+9. **Review History**: Check the change history regularly to understand what's working and what needs adjustment
+10. **Export Regularly**: Generate reports periodically to review progress and share updates
 
 ## Troubleshooting
 

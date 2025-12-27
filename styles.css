@@ -243,6 +243,11 @@ h2 {
     max-width: 600px;
 }
 
+.modal-content.modal-history {
+    max-width: 800px;
+    max-height: 85vh;
+}
+
 .help-content {
     color: var(--text-secondary);
     line-height: 1.6;
@@ -593,6 +598,19 @@ button:active {
 
 .kr-info-blocks {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.kr-badges-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.kr-dates-row {
+    display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
@@ -654,7 +672,9 @@ button:active {
     color: #ef4444;
 }
 
-.kr-status-badge {
+.kr-status-badge,
+.kr-confidence-badge,
+.kr-weight-badge {
     font-size: 0.7rem;
     padding: 4px 10px;
     border-radius: 12px;
@@ -662,6 +682,21 @@ button:active {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
+}
+
+.kr-confidence-high {
+    background: var(--success);
+    color: white;
+}
+
+.kr-confidence-medium {
+    background: #eab308;
+    color: black;
+}
+
+.kr-confidence-low {
+    background: #ef4444;
+    color: white;
 }
 
 .kr-status-on-track {
@@ -858,12 +893,8 @@ button:active {
 }
 
 .kr-weight-badge {
-    font-size: 0.7rem;
     background: var(--accent);
     color: white;
-    padding: 0.125rem 0.5rem;
-    border-radius: 4px;
-    margin-left: 0.5rem;
 }
 
 .kr-dates {
@@ -907,6 +938,153 @@ footer {
     font-size: 3rem;
     display: block;
     margin-bottom: 1rem;
+}
+
+.progress-trends-charts {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.trend-chart-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.trend-chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    gap: 1rem;
+}
+
+.trend-chart-header h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    flex: 1;
+}
+
+.trend-group-badge {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.trend-group-personal {
+    background: #10b981;
+    color: white;
+}
+
+.trend-group-team {
+    background: #eab308;
+    color: black;
+}
+
+.trend-group-company {
+    background: #3b82f6;
+    color: white;
+}
+
+.trend-chart-wrapper {
+    margin: 1rem 0;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.trend-chart {
+    width: 100%;
+    height: 200px;
+    display: block;
+}
+
+.trend-chart-stats {
+    display: flex;
+    gap: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.trend-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.trend-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.trend-stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.trend-stat-value.trend-positive {
+    color: var(--success);
+}
+
+.trend-stat-value.trend-negative {
+    color: #ef4444;
+}
+
+.trend-chart-legend {
+    display: flex;
+    gap: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.trend-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.trend-legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.trend-legend-label {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.trend-legend-value {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.history-filters label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+.history-filters input[type="radio"] {
+    cursor: pointer;
 }
 
 @media (max-width: 600px) {

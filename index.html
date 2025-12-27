@@ -20,6 +20,8 @@
                     <button id="btn-open-file">📂 Open File</button>
                     <button id="btn-new-file">📄 New File</button>
                     <button id="btn-export-txt">📥 Export Report</button>
+                    <button id="btn-progress-trends">📈 Progress Trends</button>
+                    <button id="btn-history">📊 View History</button>
                     <button id="btn-help">❓ What is OKR?</button>
                 </div>
             </section>
@@ -215,6 +217,14 @@
                         <option value="at-risk">At Risk</option>
                     </select>
                 </div>
+                <div class="form-field">
+                    <label>Confidence</label>
+                    <select id="kr-confidence">
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
                 <div class="kr-dates">
                     <div class="kr-date-field">
                         <label>Start Date:</label>
@@ -239,6 +249,62 @@
                 </div>
                 <button type="submit">Add Key Result</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal for Progress Trends -->
+    <div id="progress-trends-modal" class="modal">
+        <div class="modal-content modal-wide modal-history">
+            <span class="close" data-modal="progress-trends-modal">&times;</span>
+            <h3>📈 Progress Trends & Analysis</h3>
+            <div id="progress-trends-content">
+                <div class="history-filters">
+                    <label>
+                        <input type="radio" name="trends-view" value="grouped" id="trends-view-grouped" checked>
+                        <span>Grouped by Category</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="trends-view" value="individual" id="trends-view-individual">
+                        <span>Individual Objectives</span>
+                    </label>
+                </div>
+                <div class="history-filters" id="trends-individual-filters" style="display: none;">
+                    <select id="trends-filter-group">
+                        <option value="all">All Groups</option>
+                        <option value="Personal">Personal</option>
+                        <option value="Team">Team</option>
+                        <option value="Company">Company</option>
+                    </select>
+                    <select id="trends-filter-objective">
+                        <option value="all">All Objectives</option>
+                    </select>
+                </div>
+                <div id="progress-trends-charts" class="progress-trends-charts"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for History -->
+    <div id="history-modal" class="modal">
+        <div class="modal-content modal-wide modal-history">
+            <span class="close" data-modal="history-modal">&times;</span>
+            <h3>📊 Change History & Trends</h3>
+            <div id="history-content">
+                <div class="history-filters">
+                    <select id="history-filter-type">
+                        <option value="all">All Changes</option>
+                        <option value="objective">Objectives Only</option>
+                        <option value="keyresult">Key Results Only</option>
+                    </select>
+                    <select id="history-filter-group">
+                        <option value="all">All Groups</option>
+                        <option value="Personal">Personal</option>
+                        <option value="Team">Team</option>
+                        <option value="Company">Company</option>
+                    </select>
+                </div>
+                <div id="history-list" class="history-list"></div>
+            </div>
         </div>
     </div>
 

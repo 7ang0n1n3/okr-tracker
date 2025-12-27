@@ -3,7 +3,7 @@
 
 const FILE_HANDLE_KEY = 'okr_last_file';
 let fileHandle = null;
-let data = { objectives: [] };
+let data = { objectives: [], history: [] };
 let selectedGroupFilter = null; // null = show all, 'Personal'/'Team'/'Company' = filter by group
 
 // Check if File System Access API is supported
@@ -15,8 +15,20 @@ async function loadFromFile() {
         const file = await fileHandle.getFile();
         const text = await file.text();
         data = JSON.parse(text);
+        // Ensure history array exists
+        if (!data.history) {
+            data.history = [];
+        }
+        // Ensure objectives array exists
+        if (!data.objectives) {
+            data.objectives = [];
+        }
+        // Update charts after loading data
+        updateDashboardCharts();
     } catch (e) {
-        data = { objectives: [] };
+        data = { objectives: [], history: [] };
+        // Update charts even on error to reset them
+        updateDashboardCharts();
     }
 }
 
@@ -24,6 +36,13 @@ async function loadFromFile() {
 async function saveToFile() {
     if (!fileHandle) return;
     try {
+        // Ensure data structure is correct before saving
+        if (!data.objectives) {
+            data.objectives = [];
+        }
+        if (!data.history) {
+            data.history = [];
+        }
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(data, null, 2));
         await writable.close();
@@ -44,6 +63,7 @@ async function openFile() {
             }]
         });
         await loadFromFile();
+        updateDashboardCharts();
         renderObjectives();
         updateFileStatus(true);
         setupChartClickHandlers();
@@ -66,8 +86,9 @@ async function createFile() {
                 accept: { 'application/json': ['.json'] }
             }]
         });
-        data = { objectives: [] };
+        data = { objectives: [], history: [] };
         await saveToFile();
+        updateDashboardCharts();
         renderObjectives();
         updateFileStatus(true);
         setupChartClickHandlers();
@@ -135,6 +156,7 @@ async function tryRestoreLastFile() {
             if (permission === 'granted') {
                 fileHandle = storedHandle;
                 await loadFromFile();
+                updateDashboardCharts();
                 renderObjectives();
                 updateFileStatus(true);
                 return true;
@@ -163,6 +185,12 @@ function updateDashboardCharts() {
     const groups = ['Personal', 'Team', 'Company'];
     const circumference = 2 * Math.PI * 52; // 326.73
     
+    // Ensure data.objectives exists and is an array
+    if (!data || !data.objectives || !Array.isArray(data.objectives)) {
+        data = data || {};
+        data.objectives = [];
+    }
+    
     groups.forEach(group => {
         const groupLower = group.toLowerCase();
         const objectives = data.objectives.filter(obj => (obj.group || 'Personal') === group);
@@ -177,13 +205,19 @@ function updateDashboardCharts() {
         }
         const avgProgress = count > 0 ? Math.round(totalProgress / count) : 0;
         
-        // Update count
-        document.getElementById(`${groupLower}-count`).textContent = count;
+        // Update count - force to 0 if no objectives
+        const countElement = document.getElementById(`${groupLower}-count`);
+        if (countElement) {
+            countElement.textContent = count;
+        }
         
-        // Update percent
-        document.getElementById(`${groupLower}-percent`).textContent = `${avgProgress}%`;
+        // Update percent - force to 0% if no objectives
+        const percentElement = document.getElementById(`${groupLower}-percent`);
+        if (percentElement) {
+            percentElement.textContent = `${avgProgress}%`;
+        }
         
-        // Update ring
+        // Update ring - reset to 0 if no objectives
         const ring = document.querySelector(`.ring-${groupLower}`);
         if (ring) {
             const offset = circumference - (avgProgress / 100) * circumference;
@@ -234,6 +268,61 @@ function calculateProgress(objective) {
     return Math.min(100, Math.round(total / objective.keyResults.length));
 }
 
+// Record progress snapshot for trend tracking
+function recordProgressSnapshot() {
+    if (!data.objectives || data.objectives.length === 0) return;
+    
+    const timestamp = new Date().toISOString();
+    const snapshot = {
+        timestamp: timestamp,
+        objectives: {}
+    };
+    
+    data.objectives.forEach(obj => {
+        const progress = calculateProgress(obj);
+        snapshot.objectives[obj.id] = {
+            title: obj.title,
+            group: obj.group || 'Personal',
+            progress: progress,
+            keyResults: {}
+        };
+        
+        if (obj.keyResults) {
+            obj.keyResults.forEach(kr => {
+                const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+                snapshot.objectives[obj.id].keyResults[kr.id] = {
+                    title: kr.title,
+                    progress: krProgress,
+                    current: kr.current,
+                    target: kr.target
+                };
+            });
+        }
+    });
+    
+    // Store in history as progress snapshot
+    if (!data.history) {
+        data.history = [];
+    }
+    
+    // Check if we already have a snapshot today - if so, update it instead of adding new
+    const today = new Date().toISOString().split('T')[0];
+    const existingSnapshot = data.history.find(h => 
+        h.type === 'progress-snapshot' && 
+        h.timestamp && 
+        h.timestamp.split('T')[0] === today
+    );
+    
+    if (existingSnapshot) {
+        // Update existing snapshot - ensure it's stored in changes.snapshot
+        existingSnapshot.changes = existingSnapshot.changes || {};
+        existingSnapshot.changes.snapshot = snapshot;
+        existingSnapshot.timestamp = timestamp;
+    } else {
+        addHistoryEntry('progress-snapshot', 'system', 'all', 'Progress Snapshot', { snapshot: snapshot }, null);
+    }
+}
+
 // Render all objectives
 function renderObjectives() {
     const container = document.getElementById('objectives-container');
@@ -248,6 +337,9 @@ function renderObjectives() {
         return;
     }
     
+    // Always update charts first, even if no objectives
+    updateDashboardCharts();
+    
     if (data.objectives.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -258,7 +350,6 @@ function renderObjectives() {
         return;
     }
     
-    updateDashboardCharts();
     updateFilterIndicators();
     
     // Filter objectives based on selected group
@@ -347,12 +438,17 @@ function renderObjectives() {
                                 return `
                                     <div class="kr-item kr-border-${status}" data-kr-id="${kr.id}">
                                         <div class="kr-info-blocks">
-                                            <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
-                                            <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
-                                            ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
-                                            ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
-                                            ${kr.targetDate ? `<span class="kr-meta-item${getDateWarningClass(kr.targetDate)}">Target: ${kr.targetDate}</span>` : ''}
-                                            ${kr.lastCheckin ? `<span class="kr-meta-item ${isCheckinOverdue(kr.lastCheckin) ? 'kr-checkin-overdue' : ''}">Last Check-in: ${kr.lastCheckin}</span>` : ''}
+                                            <div class="kr-badges-row">
+                                                <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
+                                                <span class="kr-confidence-badge kr-confidence-${(kr.confidence || 'Medium').toLowerCase()}">Confidence: ${kr.confidence || 'Medium'}</span>
+                                                <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
+                                            </div>
+                                            <div class="kr-dates-row">
+                                                ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
+                                                ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
+                                                ${kr.targetDate ? `<span class="kr-meta-item${getDateWarningClass(kr.targetDate)}">Target: ${kr.targetDate}</span>` : ''}
+                                                ${kr.lastCheckin ? `<span class="kr-meta-item ${isCheckinOverdue(kr.lastCheckin) ? 'kr-checkin-overdue' : ''}">Last Check-in: ${kr.lastCheckin}</span>` : ''}
+                                            </div>
                                         </div>
                                         <div class="kr-controls">
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease">−</button>
@@ -425,6 +521,31 @@ function getStatusLabel(status) {
         'at-risk': 'At Risk'
     };
     return labels[status] || 'On Track';
+}
+
+// Add history entry
+function addHistoryEntry(type, itemType, itemId, itemTitle, changes, group = null) {
+    if (!data.history) {
+        data.history = [];
+    }
+    
+    const entry = {
+        id: generateId(),
+        timestamp: new Date().toISOString(),
+        type: type, // 'created', 'updated', 'progress', 'status', 'deleted'
+        itemType: itemType, // 'objective' or 'keyresult'
+        itemId: itemId,
+        itemTitle: itemTitle,
+        changes: changes, // Object describing what changed
+        group: group
+    };
+    
+    data.history.unshift(entry); // Add to beginning
+    
+    // Keep only last 1000 history entries to prevent file bloat
+    if (data.history.length > 1000) {
+        data.history = data.history.slice(0, 1000);
+    }
 }
 
 // Check if last check-in is 8 days or more ago
@@ -580,15 +701,33 @@ async function saveObjective(formData) {
         const obj = data.objectives.find(o => o.id === editId);
         if (obj) {
             const oldWeight = obj.weight;
+            const changes = {};
+            
+            // Track all possible changes
+            if (obj.title !== formData.title) changes.title = { from: obj.title, to: formData.title };
+            if (obj.group !== formData.group) changes.group = { from: obj.group, to: formData.group };
+            if (obj.year !== formData.year) changes.year = { from: obj.year, to: formData.year };
+            if (obj.quarter !== formData.quarter) changes.quarter = { from: obj.quarter, to: formData.quarter };
+            if (obj.purpose !== formData.purpose) changes.purpose = { from: obj.purpose || '', to: formData.purpose || '' };
+            if (obj.startDate !== formData.startDate) changes.startDate = { from: obj.startDate || '', to: formData.startDate || '' };
+            if (obj.targetDate !== formData.targetDate) changes.targetDate = { from: obj.targetDate || '', to: formData.targetDate || '' };
+            if (obj.weight !== formData.weight) changes.weight = { from: obj.weight, to: formData.weight };
+            if (obj.lastCheckin !== formData.lastCheckin) changes.lastCheckin = { from: obj.lastCheckin || '', to: formData.lastCheckin || '' };
+            
             obj.group = formData.group;
             obj.year = formData.year;
             obj.quarter = formData.quarter;
-        obj.title = formData.title;
-        obj.purpose = formData.purpose;
-        obj.startDate = formData.startDate;
-        obj.targetDate = formData.targetDate;
-        obj.weight = formData.weight;
-        obj.lastCheckin = formData.lastCheckin;
+            obj.title = formData.title;
+            obj.purpose = formData.purpose;
+            obj.startDate = formData.startDate;
+            obj.targetDate = formData.targetDate;
+            obj.weight = formData.weight;
+            obj.lastCheckin = formData.lastCheckin;
+            
+            // Track changes in history (record if any field changed)
+            if (Object.keys(changes).length > 0) {
+                addHistoryEntry('updated', 'objective', editId, formData.title, changes, formData.group);
+            }
             
             // If weight changed, balance other objectives
             if (oldWeight !== formData.weight) {
@@ -598,8 +737,9 @@ async function saveObjective(formData) {
     } else {
         // Add new
         const today = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        const newId = generateId();
         data.objectives.push({
-            id: generateId(),
+            id: newId,
             group: formData.group,
             year: formData.year,
             quarter: formData.quarter,
@@ -614,17 +754,29 @@ async function saveObjective(formData) {
         });
         // Auto-balance all objective weights
         autoBalanceObjectiveWeights();
+        // Track creation in history
+        addHistoryEntry('created', 'objective', newId, formData.title, { created: true }, formData.group);
     }
     
-    await saveToFile();
+    recordProgressSnapshot(); // Record snapshot before saving
+    await saveToFile(); // Save including the snapshot
+    // Update charts immediately before rendering to ensure they reflect the new objective
+    updateDashboardCharts();
     renderObjectives();
 }
 
 // Delete objective
 async function deleteObjective(id) {
     if (!confirm('Delete this objective and all its key results?')) return;
+    const obj = data.objectives.find(o => o.id === id);
+    if (obj) {
+        addHistoryEntry('deleted', 'objective', id, obj.title, { deleted: true }, obj.group);
+    }
     data.objectives = data.objectives.filter(obj => obj.id !== id);
-    await saveToFile();
+    recordProgressSnapshot(); // Record snapshot before saving
+    await saveToFile(); // Save including the snapshot
+    // Update charts immediately to reflect deletion
+    updateDashboardCharts();
     renderObjectives();
 }
 
@@ -648,6 +800,7 @@ function openKRModal(objectiveId, krId = null) {
             document.getElementById('kr-target-date').value = kr.targetDate || '';
             document.getElementById('kr-weight').value = kr.weight || 100;
             document.getElementById('kr-status').value = kr.status || 'on-track';
+            document.getElementById('kr-confidence').value = kr.confidence || 'Medium';
             document.getElementById('kr-last-checkin').value = kr.lastCheckin || '';
             document.getElementById('kr-evidence').value = kr.evidence || '';
             document.getElementById('kr-comments').value = kr.comments || '';
@@ -662,6 +815,7 @@ function openKRModal(objectiveId, krId = null) {
         document.getElementById('kr-target-date').value = '';
         document.getElementById('kr-weight').value = '100';
         document.getElementById('kr-status').value = 'on-track';
+        document.getElementById('kr-confidence').value = 'Medium';
         document.getElementById('kr-last-checkin').value = '';
         document.getElementById('kr-evidence').value = '';
         document.getElementById('kr-comments').value = '';
@@ -677,7 +831,7 @@ function closeModal(modalId = 'kr-modal') {
 }
 
 // Add or update key result
-async function saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, status, lastCheckin, evidence, comments, editId = null) {
+async function saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, status, confidence, lastCheckin, evidence, comments, editId = null) {
     const objective = data.objectives.find(obj => obj.id === objectiveId);
     if (objective) {
         if (!objective.keyResults) objective.keyResults = [];
@@ -687,6 +841,20 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
             const kr = objective.keyResults.find(k => k.id === editId);
             if (kr) {
                 const oldWeight = kr.weight;
+                const changes = {};
+                
+                // Track all possible changes
+                if (kr.title !== title) changes.title = { from: kr.title, to: title };
+                if (kr.status !== status) changes.status = { from: kr.status, to: status };
+                if (kr.confidence !== confidence) changes.confidence = { from: kr.confidence || 'Medium', to: confidence };
+                if (kr.target !== parseInt(target)) changes.target = { from: kr.target, to: parseInt(target) };
+                if (kr.startDate !== startDate) changes.startDate = { from: kr.startDate || '', to: startDate || '' };
+                if (kr.targetDate !== targetDate) changes.targetDate = { from: kr.targetDate || '', to: targetDate || '' };
+                if (kr.weight !== parseInt(weight)) changes.weight = { from: kr.weight, to: parseInt(weight) };
+                if (kr.lastCheckin !== lastCheckin) changes.lastCheckin = { from: kr.lastCheckin || '', to: lastCheckin || '' };
+                if (kr.evidence !== evidence) changes.evidence = { from: kr.evidence || '', to: evidence || '' };
+                if (kr.comments !== comments) changes.comments = { from: kr.comments || '', to: comments || '' };
+                
                 kr.title = title;
                 kr.target = parseInt(target);
                 kr.current = Math.min(kr.current, parseInt(target));
@@ -694,9 +862,15 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
                 kr.targetDate = targetDate;
                 kr.weight = parseInt(weight);
                 kr.status = status;
+                kr.confidence = confidence;
                 kr.lastCheckin = lastCheckin;
                 kr.evidence = evidence;
                 kr.comments = comments;
+                
+                // Track changes in history (record if any field changed)
+                if (Object.keys(changes).length > 0) {
+                    addHistoryEntry('updated', 'keyresult', editId, title, changes, objective.group);
+                }
                 
                 // If weight changed, balance other KRs
                 if (oldWeight !== parseInt(weight)) {
@@ -706,8 +880,9 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
         } else {
             // Add new
             const today = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
+            const newKrId = generateId();
             objective.keyResults.push({
-                id: generateId(),
+                id: newKrId,
                 title: title,
                 target: parseInt(target),
                 current: 0,
@@ -715,6 +890,7 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
                 targetDate: targetDate,
                 weight: 0, // Will be balanced
                 status: status,
+                confidence: confidence,
                 lastCheckin: lastCheckin,
                 evidence: evidence,
                 comments: comments,
@@ -722,9 +898,14 @@ async function saveKeyResult(objectiveId, title, target, startDate, targetDate, 
             });
             // Auto-balance all KR weights for this objective
             autoBalanceKRWeights(objectiveId);
+            // Track creation in history
+            addHistoryEntry('created', 'keyresult', newKrId, title, { created: true }, objective.group);
         }
-        await saveToFile();
+        recordProgressSnapshot(); // Record snapshot before saving
+        await saveToFile(); // Save including the snapshot
         renderObjectives();
+        // Explicitly update charts to ensure they reflect the new KR
+        updateDashboardCharts();
     }
 }
 
@@ -734,8 +915,24 @@ async function updateKR(objectiveId, krId, delta) {
     if (objective) {
         const kr = objective.keyResults.find(k => k.id === krId);
         if (kr) {
+            const oldCurrent = kr.current;
+            const oldProgress = Math.min(100, Math.round((oldCurrent / kr.target) * 100));
             kr.current = Math.max(0, Math.min(kr.target, kr.current + delta));
-            await saveToFile();
+            const newProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+            
+            // Track progress change in history
+            if (oldCurrent !== kr.current) {
+                addHistoryEntry('progress', 'keyresult', krId, kr.title, {
+                    progress: {
+                        from: `${oldCurrent}/${kr.target} (${oldProgress}%)`,
+                        to: `${kr.current}/${kr.target} (${newProgress}%)`,
+                        delta: delta
+                    }
+                }, objective.group);
+            }
+            
+            recordProgressSnapshot(); // Record snapshot before saving
+            await saveToFile(); // Save including the snapshot
             renderObjectives();
         }
     }
@@ -745,9 +942,529 @@ async function updateKR(objectiveId, krId, delta) {
 async function deleteKR(objectiveId, krId) {
     const objective = data.objectives.find(obj => obj.id === objectiveId);
     if (objective) {
+        const kr = objective.keyResults.find(k => k.id === krId);
+        if (kr) {
+            addHistoryEntry('deleted', 'keyresult', krId, kr.title, { deleted: true }, objective.group);
+        }
         objective.keyResults = objective.keyResults.filter(k => k.id !== krId);
-        await saveToFile();
+        recordProgressSnapshot(); // Record snapshot before saving
+        await saveToFile(); // Save including the snapshot
+        // Update charts immediately to reflect deletion
+        updateDashboardCharts();
         renderObjectives();
+    }
+}
+
+// Open progress trends modal
+function openProgressTrendsModal() {
+    // Set up event listeners before rendering
+    setupProgressTrendsFilters();
+    renderProgressTrends();
+    document.getElementById('progress-trends-modal').classList.add('active');
+}
+
+// Render progress trends visualization
+function renderProgressTrends() {
+    const container = document.getElementById('progress-trends-charts');
+    if (!container) return;
+    
+    // Get progress snapshots from history
+    const snapshots = (data.history || []).filter(h => h.type === 'progress-snapshot' && h.changes && h.changes.snapshot);
+    
+    if (snapshots.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <span>📈</span>
+                <p>No progress history available yet. Progress will be tracked as you update your OKRs.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Check which view mode is selected
+    const viewMode = document.querySelector('input[name="trends-view"]:checked')?.value || 'grouped';
+    const individualFilters = document.getElementById('trends-individual-filters');
+    if (individualFilters) {
+        individualFilters.style.display = viewMode === 'individual' ? 'flex' : 'none';
+    }
+    
+    if (viewMode === 'grouped') {
+        renderGroupedProgressTrends(container, snapshots);
+    } else {
+        renderIndividualProgressTrends(container, snapshots);
+    }
+}
+
+// Render grouped progress trends (one chart for Personal, Team, Company)
+function renderGroupedProgressTrends(container, snapshots) {
+    const groups = ['Personal', 'Team', 'Company'];
+    const groupColors = {
+        'Personal': '#10b981',
+        'Team': '#eab308',
+        'Company': '#3b82f6'
+    };
+    
+    // Extract progress data by group
+    const groupProgressData = {};
+    groups.forEach(group => {
+        groupProgressData[group] = [];
+    });
+    
+    const existingObjectiveIds = new Set((data.objectives || []).map(obj => obj.id));
+    
+    // Get current groups that have objectives (to filter out groups with no current objectives)
+    const currentGroupsWithObjectives = new Set();
+    (data.objectives || []).forEach(obj => {
+        currentGroupsWithObjectives.add(obj.group || 'Personal');
+    });
+    
+    snapshots.forEach(snapshot => {
+        const date = new Date(snapshot.timestamp).toLocaleDateString();
+        const snapshotData = snapshot.changes.snapshot;
+        
+        // Calculate average progress for each group
+        groups.forEach(group => {
+            // Skip groups that don't currently have any objectives
+            if (!currentGroupsWithObjectives.has(group)) return;
+            
+            let totalProgress = 0;
+            let count = 0;
+            
+            Object.keys(snapshotData.objectives).forEach(objId => {
+                // Only include data for objectives that still exist
+                if (!existingObjectiveIds.has(objId)) return;
+                
+                const objData = snapshotData.objectives[objId];
+                if (objData.group === group) {
+                    totalProgress += objData.progress;
+                    count++;
+                }
+            });
+            
+            // Only add data point if there are objectives in this group
+            if (count > 0) {
+                const avgProgress = Math.round(totalProgress / count);
+                groupProgressData[group].push({
+                    date: date,
+                    progress: avgProgress,
+                    timestamp: snapshot.timestamp,
+                    count: count
+                });
+            }
+        });
+    });
+    
+    // Sort data points by timestamp for each group
+    groups.forEach(group => {
+        groupProgressData[group].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    });
+    
+    // Find all unique dates
+    const allDates = new Set();
+    groups.forEach(group => {
+        groupProgressData[group].forEach(point => allDates.add(point.timestamp));
+    });
+    const sortedDates = Array.from(allDates).sort((a, b) => new Date(a) - new Date(b));
+    
+    if (sortedDates.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <span>📈</span>
+                <p>No data matches the selected filters.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Create a single chart with all groups
+    const chartHeight = 300;
+    const chartWidth = 800;
+    const padding = 50;
+    const usableWidth = chartWidth - (padding * 2);
+    const usableHeight = chartHeight - (padding * 2);
+    const maxProgress = 100;
+    
+    // Generate paths for each group
+    const paths = groups.map(group => {
+        const dataPoints = groupProgressData[group];
+        if (dataPoints.length === 0) return null;
+        
+        let pathData = '';
+        dataPoints.forEach((point, index) => {
+            const dateIndex = sortedDates.indexOf(point.timestamp);
+            const x = padding + (dateIndex / (sortedDates.length - 1 || 1)) * usableWidth;
+            const y = padding + usableHeight - (point.progress / maxProgress) * usableHeight;
+            
+            if (index === 0) {
+                pathData += `M ${x} ${y}`;
+            } else {
+                pathData += ` L ${x} ${y}`;
+            }
+        });
+        
+        return { group, pathData, dataPoints, color: groupColors[group] };
+    }).filter(p => p !== null);
+    
+    // Generate points for tooltips
+    const allPoints = [];
+    paths.forEach(path => {
+        path.dataPoints.forEach((point, index) => {
+            const dateIndex = sortedDates.indexOf(point.timestamp);
+            const x = padding + (dateIndex / (sortedDates.length - 1 || 1)) * usableWidth;
+            const y = padding + usableHeight - (point.progress / maxProgress) * usableHeight;
+            allPoints.push({ x, y, progress: point.progress, date: point.date, group: path.group, count: point.count });
+        });
+    });
+    
+    container.innerHTML = `
+        <div class="trend-chart-container">
+            <div class="trend-chart-header">
+                <h4>Overall Progress by Category</h4>
+            </div>
+            <div class="trend-chart-wrapper">
+                <svg class="trend-chart" viewBox="0 0 ${chartWidth} ${chartHeight}">
+                    <!-- Grid lines -->
+                    ${[0, 25, 50, 75, 100].map(percent => {
+                        const y = padding + usableHeight - (percent / maxProgress) * usableHeight;
+                        return `<line x1="${padding}" y1="${y}" x2="${chartWidth - padding}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2,2" opacity="0.3"/>`;
+                    }).join('')}
+                    
+                    <!-- Progress lines for each group -->
+                    ${paths.map(path => `
+                        <path d="${path.pathData}" fill="none" stroke="${path.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    `).join('')}
+                    
+                    <!-- Data points -->
+                    ${allPoints.map(p => `
+                        <circle cx="${p.x}" cy="${p.y}" r="4" fill="${groupColors[p.group]}" stroke="var(--bg-card)" stroke-width="2">
+                            <title>${p.group}: ${p.date} - ${p.progress}% (${p.count} objective${p.count !== 1 ? 's' : ''})</title>
+                        </circle>
+                    `).join('')}
+                    
+                    <!-- Y-axis labels -->
+                    ${[0, 25, 50, 75, 100].map(percent => {
+                        const y = padding + usableHeight - (percent / maxProgress) * usableHeight;
+                        return `<text x="${padding - 10}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--text-secondary)">${percent}%</text>`;
+                    }).join('')}
+                    
+                    <!-- X-axis labels -->
+                    ${sortedDates.map((timestamp, index) => {
+                        const date = new Date(timestamp).toLocaleDateString();
+                        const x = padding + (index / (sortedDates.length - 1 || 1)) * usableWidth;
+                        const showLabel = index === 0 || index === sortedDates.length - 1 || sortedDates.length <= 5;
+                        if (!showLabel) return '';
+                        return `<text x="${x}" y="${chartHeight - padding + 20}" text-anchor="middle" font-size="10" fill="var(--text-secondary)">${date}</text>`;
+                    }).join('')}
+                </svg>
+            </div>
+            <div class="trend-chart-legend">
+                ${paths.map(path => `
+                    <div class="trend-legend-item">
+                        <span class="trend-legend-color" style="background: ${path.color}"></span>
+                        <span class="trend-legend-label">${path.group}</span>
+                        ${path.dataPoints.length > 0 ? `
+                            <span class="trend-legend-value">${path.dataPoints[path.dataPoints.length - 1].progress}%</span>
+                        ` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+// Render individual progress trends (original implementation)
+function renderIndividualProgressTrends(container, snapshots) {
+    const filterGroup = document.getElementById('trends-filter-group')?.value || 'all';
+    const filterObjective = document.getElementById('trends-filter-objective')?.value || 'all';
+    
+    // Extract progress data - only for objectives that still exist
+    const progressData = {};
+    const existingObjectiveIds = new Set((data.objectives || []).map(obj => obj.id));
+    
+    snapshots.forEach(snapshot => {
+        const date = new Date(snapshot.timestamp).toLocaleDateString();
+        const snapshotData = snapshot.changes.snapshot;
+        
+        Object.keys(snapshotData.objectives).forEach(objId => {
+            // Only include data for objectives that still exist
+            if (!existingObjectiveIds.has(objId)) return;
+            
+            const objData = snapshotData.objectives[objId];
+            
+            // Apply filters
+            if (filterGroup !== 'all' && objData.group !== filterGroup) return;
+            if (filterObjective !== 'all' && objId !== filterObjective) return;
+            
+            if (!progressData[objId]) {
+                // Use current objective title if it exists, otherwise use snapshot title
+                const currentObj = data.objectives.find(o => o.id === objId);
+                progressData[objId] = {
+                    title: currentObj ? currentObj.title : objData.title,
+                    group: objData.group,
+                    dataPoints: []
+                };
+            }
+            
+            progressData[objId].dataPoints.push({
+                date: date,
+                progress: objData.progress,
+                timestamp: snapshot.timestamp
+            });
+        });
+    });
+    
+    if (Object.keys(progressData).length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <span>📈</span>
+                <p>No data matches the selected filters.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Update objective filter dropdown
+    updateTrendsObjectiveFilter(progressData, filterObjective);
+    
+    // Render charts
+    container.innerHTML = Object.keys(progressData).map(objId => {
+        const objData = progressData[objId];
+        const dataPoints = objData.dataPoints.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        if (dataPoints.length === 0) return '';
+        
+        const maxProgress = Math.max(...dataPoints.map(d => d.progress), 100);
+        const chartHeight = 200;
+        const chartWidth = 600;
+        const padding = 40;
+        const usableWidth = chartWidth - (padding * 2);
+        const usableHeight = chartHeight - (padding * 2);
+        
+        // Generate SVG path for line chart
+        let pathData = '';
+        dataPoints.forEach((point, index) => {
+            const x = padding + (index / (dataPoints.length - 1 || 1)) * usableWidth;
+            const y = padding + usableHeight - (point.progress / maxProgress) * usableHeight;
+            
+            if (index === 0) {
+                pathData += `M ${x} ${y}`;
+            } else {
+                pathData += ` L ${x} ${y}`;
+            }
+        });
+        
+        // Generate points
+        const points = dataPoints.map((point, index) => {
+            const x = padding + (index / (dataPoints.length - 1 || 1)) * usableWidth;
+            const y = padding + usableHeight - (point.progress / maxProgress) * usableHeight;
+            return { x, y, progress: point.progress, date: point.date };
+        });
+        
+        return `
+            <div class="trend-chart-container">
+                <div class="trend-chart-header">
+                    <h4>${escapeHtml(objData.title)}</h4>
+                    <span class="trend-group-badge trend-group-${objData.group.toLowerCase()}">${objData.group}</span>
+                </div>
+                <div class="trend-chart-wrapper">
+                    <svg class="trend-chart" viewBox="0 0 ${chartWidth} ${chartHeight}">
+                        <!-- Grid lines -->
+                        ${[0, 25, 50, 75, 100].map(percent => {
+                            const y = padding + usableHeight - (percent / maxProgress) * usableHeight;
+                            return `<line x1="${padding}" y1="${y}" x2="${chartWidth - padding}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2,2" opacity="0.3"/>`;
+                        }).join('')}
+                        
+                        <!-- Progress line -->
+                        <path d="${pathData}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        
+                        <!-- Data points -->
+                        ${points.map(p => `
+                            <circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent)" stroke="var(--bg-card)" stroke-width="2">
+                                <title>${p.date}: ${p.progress}%</title>
+                            </circle>
+                        `).join('')}
+                        
+                        <!-- Y-axis labels -->
+                        ${[0, 25, 50, 75, 100].map(percent => {
+                            const y = padding + usableHeight - (percent / maxProgress) * usableHeight;
+                            return `<text x="${padding - 10}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--text-secondary)">${percent}%</text>`;
+                        }).join('')}
+                        
+                        <!-- X-axis labels -->
+                        ${dataPoints.map((point, index) => {
+                            const x = padding + (index / (dataPoints.length - 1 || 1)) * usableWidth;
+                            const showLabel = index === 0 || index === dataPoints.length - 1 || dataPoints.length <= 5;
+                            if (!showLabel) return '';
+                            return `<text x="${x}" y="${chartHeight - padding + 20}" text-anchor="middle" font-size="10" fill="var(--text-secondary)">${point.date}</text>`;
+                        }).join('')}
+                    </svg>
+                </div>
+                <div class="trend-chart-stats">
+                    <div class="trend-stat">
+                        <span class="trend-stat-label">Current:</span>
+                        <span class="trend-stat-value">${dataPoints[dataPoints.length - 1].progress}%</span>
+                    </div>
+                    ${dataPoints.length > 1 ? `
+                        <div class="trend-stat">
+                            <span class="trend-stat-label">Change:</span>
+                            <span class="trend-stat-value ${dataPoints[dataPoints.length - 1].progress >= dataPoints[0].progress ? 'trend-positive' : 'trend-negative'}">
+                                ${dataPoints[dataPoints.length - 1].progress >= dataPoints[0].progress ? '+' : ''}${dataPoints[dataPoints.length - 1].progress - dataPoints[0].progress}%
+                            </span>
+                        </div>
+                        <div class="trend-stat">
+                            <span class="trend-stat-label">Data Points:</span>
+                            <span class="trend-stat-value">${dataPoints.length}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update trends objective filter dropdown
+function updateTrendsObjectiveFilter(progressData, selectedId) {
+    const filterSelect = document.getElementById('trends-filter-objective');
+    if (!filterSelect) return;
+    
+    const currentValue = filterSelect.value;
+    filterSelect.innerHTML = '<option value="all">All Objectives</option>';
+    
+    Object.keys(progressData).forEach(objId => {
+        const obj = data.objectives.find(o => o.id === objId);
+        if (obj) {
+            const option = document.createElement('option');
+            option.value = objId;
+            option.textContent = obj.title;
+            if (objId === currentValue) {
+                option.selected = true;
+            }
+            filterSelect.appendChild(option);
+        }
+    });
+}
+
+// Set up progress trends filter listeners
+function setupProgressTrendsFilters() {
+    const groupFilter = document.getElementById('trends-filter-group');
+    const objectiveFilter = document.getElementById('trends-filter-objective');
+    const viewModeRadios = document.querySelectorAll('input[name="trends-view"]');
+    
+    if (groupFilter) {
+        groupFilter.addEventListener('change', () => {
+            renderProgressTrends();
+        });
+    }
+    if (objectiveFilter) {
+        objectiveFilter.addEventListener('change', () => {
+            renderProgressTrends();
+        });
+    }
+    if (viewModeRadios.length > 0) {
+        viewModeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                renderProgressTrends();
+            });
+        });
+    }
+}
+
+// Open history modal
+function openHistoryModal() {
+    renderHistory();
+    document.getElementById('history-modal').classList.add('active');
+}
+
+// Render history view
+function renderHistory() {
+    const container = document.getElementById('history-list');
+    if (!container) return;
+    
+    if (!data.history || data.history.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <span>📊</span>
+                <p>No history available yet. Changes will be tracked as you work with your OKRs.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const filterType = document.getElementById('history-filter-type')?.value || 'all';
+    const filterGroup = document.getElementById('history-filter-group')?.value || 'all';
+    
+    let filteredHistory = data.history;
+    
+    if (filterType !== 'all') {
+        filteredHistory = filteredHistory.filter(entry => entry.itemType === filterType);
+    }
+    
+    if (filterGroup !== 'all') {
+        filteredHistory = filteredHistory.filter(entry => entry.group === filterGroup);
+    }
+    
+    if (filteredHistory.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <span>📊</span>
+                <p>No history matches the selected filters.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = filteredHistory.map(entry => {
+        const date = new Date(entry.timestamp);
+        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        const typeIcon = entry.itemType === 'objective' ? '🎯' : '📊';
+        const typeLabel = entry.itemType === 'objective' ? 'Objective' : 'Key Result';
+        
+        let changeDescription = '';
+        if (entry.type === 'created') {
+            changeDescription = ''; // Badge already shows "Created"
+        } else if (entry.type === 'deleted') {
+            changeDescription = ''; // Badge already shows "Deleted"
+        } else if (entry.type === 'progress') {
+            changeDescription = `${entry.changes.progress.from} → ${entry.changes.progress.to}`; // Badge already shows "Progress"
+        } else if (entry.type === 'updated') {
+            const changeList = Object.keys(entry.changes).map(key => {
+                const change = entry.changes[key];
+                if (key === 'status') {
+                    return `${key}: ${getStatusLabel(change.from)} → ${getStatusLabel(change.to)}`;
+                }
+                return `${key}: ${change.from} → ${change.to}`;
+            }).join(', ');
+            changeDescription = changeList; // Badge already shows "Updated"
+        }
+        
+        return `
+            <div class="history-entry">
+                <div class="history-entry-header">
+                    <span class="history-type-icon">${typeIcon}</span>
+                    <span class="history-item-type">${typeLabel}</span>
+                    <span class="history-item-title">${escapeHtml(entry.itemTitle)}</span>
+                    ${entry.group ? `<span class="history-group-badge history-group-${entry.group.toLowerCase()}">${entry.group}</span>` : ''}
+                    <span class="history-timestamp">${dateStr}</span>
+                </div>
+                <div class="history-entry-details">
+                    <span class="history-change-type history-change-${entry.type}">${entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}</span>
+                    <span class="history-change-description">${changeDescription}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Set up history filter listeners
+function setupHistoryFilters() {
+    const typeFilter = document.getElementById('history-filter-type');
+    const groupFilter = document.getElementById('history-filter-group');
+    
+    if (typeFilter) {
+        typeFilter.addEventListener('change', renderHistory);
+    }
+    if (groupFilter) {
+        groupFilter.addEventListener('change', renderHistory);
     }
 }
 
@@ -808,6 +1525,7 @@ function exportToText() {
                     text += `\n  ${krIndex + 1}. ${kr.title}\n`;
                     text += `     Progress: ${kr.current}/${kr.target} (${krProgress}%)\n`;
                     text += `     Status: ${getStatusLabel(kr.status || 'on-track')}\n`;
+                    text += `     Confidence: ${kr.confidence || 'Medium'}\n`;
                     text += `     Weight: ${kr.weight || 100}%\n`;
                     const krCreatedDate = kr.created || kr.createdAt;
                     text += `     Created: ${krCreatedDate ? formatDateOnly(krCreatedDate) : 'N/A'}\n`;
@@ -845,7 +1563,7 @@ document.getElementById('btn-new-file').addEventListener('click', createFile);
 document.getElementById('btn-export-txt').addEventListener('click', exportToText);
 document.getElementById('btn-add-objective').addEventListener('click', () => openObjectiveModal());
 
-document.getElementById('objective-form').addEventListener('submit', (e) => {
+document.getElementById('objective-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = {
         editId: document.getElementById('objective-edit-id').value || null,
@@ -860,12 +1578,12 @@ document.getElementById('objective-form').addEventListener('submit', (e) => {
         lastCheckin: document.getElementById('objective-last-checkin').value
     };
     if (formData.title) {
-        saveObjective(formData);
+        await saveObjective(formData);
         closeModal('objective-modal');
     }
 });
 
-document.getElementById('kr-form').addEventListener('submit', (e) => {
+document.getElementById('kr-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const objectiveId = document.getElementById('kr-objective-id').value;
     const editId = document.getElementById('kr-edit-id').value;
@@ -875,11 +1593,12 @@ document.getElementById('kr-form').addEventListener('submit', (e) => {
     const targetDate = document.getElementById('kr-target-date').value;
     const weight = document.getElementById('kr-weight').value;
     const status = document.getElementById('kr-status').value;
+    const confidence = document.getElementById('kr-confidence').value;
     const lastCheckin = document.getElementById('kr-last-checkin').value;
     const evidence = document.getElementById('kr-evidence').value.trim();
     const comments = document.getElementById('kr-comments').value.trim();
     if (title && target && startDate && targetDate) {
-        saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, status, lastCheckin, evidence, comments, editId || null);
+        await saveKeyResult(objectiveId, title, target, startDate, targetDate, weight, status, confidence, lastCheckin, evidence, comments, editId || null);
         closeModal();
     }
 });
@@ -892,6 +1611,14 @@ document.getElementById('btn-balance-krs').addEventListener('click', () => {
         balanceKRWeights(objectiveId);
         closeModal();
     }
+});
+
+document.getElementById('btn-progress-trends').addEventListener('click', () => {
+    openProgressTrendsModal();
+});
+
+document.getElementById('btn-history').addEventListener('click', () => {
+    openHistoryModal();
 });
 
 document.getElementById('btn-help').addEventListener('click', () => {
@@ -963,7 +1690,17 @@ if (!isFileSystemSupported) {
         }
         // Set up chart click handlers after initial render
         setupChartClickHandlers();
+        setupHistoryFilters();
+        setupProgressTrendsFilters();
+        // Record initial progress snapshot
+        recordProgressSnapshot();
     });
     // Also set up handlers if file is already restored
     setupChartClickHandlers();
+    setupHistoryFilters();
+    setupProgressTrendsFilters();
+    // Record initial progress snapshot if data exists
+    if (data && data.objectives && data.objectives.length > 0) {
+        recordProgressSnapshot();
+    }
 }
