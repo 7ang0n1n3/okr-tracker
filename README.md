@@ -1,5 +1,7 @@
 # OKR Tracker
 
+**Version 2.0.0**
+
 A offline or server hosted web-based application for tracking Objectives and Key Results (OKRs). This tool helps individuals and teams set, monitor, and achieve their goals using the OKR framework popularized by companies like Google, Intel, and LinkedIn.
 
 ![OKR Tracker Demo](demo.png)
