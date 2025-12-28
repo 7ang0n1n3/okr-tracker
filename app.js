@@ -305,22 +305,9 @@ function recordProgressSnapshot() {
         data.history = [];
     }
     
-    // Check if we already have a snapshot today - if so, update it instead of adding new
-    const today = new Date().toISOString().split('T')[0];
-    const existingSnapshot = data.history.find(h => 
-        h.type === 'progress-snapshot' && 
-        h.timestamp && 
-        h.timestamp.split('T')[0] === today
-    );
-    
-    if (existingSnapshot) {
-        // Update existing snapshot - ensure it's stored in changes.snapshot
-        existingSnapshot.changes = existingSnapshot.changes || {};
-        existingSnapshot.changes.snapshot = snapshot;
-        existingSnapshot.timestamp = timestamp;
-    } else {
-        addHistoryEntry('progress-snapshot', 'system', 'all', 'Progress Snapshot', { snapshot: snapshot }, null);
-    }
+    // Always create a new snapshot entry to track progress changes over time
+    // This allows the chart to show progression even within the same day
+    addHistoryEntry('progress-snapshot', 'system', 'all', 'Progress Snapshot', { snapshot: snapshot }, null);
 }
 
 // Render all objectives
