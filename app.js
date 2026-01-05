@@ -2,12 +2,55 @@
 // Data stored in a local JSON file using File System Access API
 
 const FILE_HANDLE_KEY = 'okr_last_file';
+const LOCALSTORAGE_DATA_KEY = 'okr_data_cache';
 let fileHandle = null;
 let data = { objectives: [], history: [] };
 let selectedGroupFilter = null; // null = show all, 'Personal'/'Team'/'Company' = filter by group
 
 // Check if File System Access API is supported
 const isFileSystemSupported = 'showOpenFilePicker' in window;
+
+// Save data to localStorage (autosave cache)
+function saveToLocalStorage() {
+    try {
+        if (!data.objectives) {
+            data.objectives = [];
+        }
+        if (!data.history) {
+            data.history = [];
+        }
+        localStorage.setItem(LOCALSTORAGE_DATA_KEY, JSON.stringify(data));
+    } catch (e) {
+        // Handle quota exceeded or other localStorage errors gracefully
+        if (e.name === 'QuotaExceededError') {
+            console.warn('LocalStorage quota exceeded, cache not saved');
+        } else {
+            console.warn('Failed to save to localStorage:', e);
+        }
+    }
+}
+
+// Load data from localStorage (autosave cache)
+function loadFromLocalStorage() {
+    try {
+        const cached = localStorage.getItem(LOCALSTORAGE_DATA_KEY);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            // Ensure history array exists
+            if (!parsed.history) {
+                parsed.history = [];
+            }
+            // Ensure objectives array exists
+            if (!parsed.objectives) {
+                parsed.objectives = [];
+            }
+            return parsed;
+        }
+    } catch (e) {
+        console.warn('Failed to load from localStorage:', e);
+    }
+    return null;
+}
 
 // Load data from file
 async function loadFromFile() {
@@ -23,6 +66,8 @@ async function loadFromFile() {
         if (!data.objectives) {
             data.objectives = [];
         }
+        // Save to localStorage after loading from file
+        saveToLocalStorage();
         // Update charts after loading data
         updateDashboardCharts();
     } catch (e) {
@@ -46,6 +91,8 @@ async function saveToFile() {
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(data, null, 2));
         await writable.close();
+        // Save to localStorage after saving to file
+        saveToLocalStorage();
         updateFileStatus(true);
     } catch (e) {
         console.error('Failed to save:', e);
@@ -149,18 +196,33 @@ function openIndexedDB() {
 // Try to restore last opened file on page load
 async function tryRestoreLastFile() {
     try {
+        // First, try to load from localStorage cache for immediate display
+        const cachedData = loadFromLocalStorage();
+        if (cachedData) {
+            data = cachedData;
+            updateDashboardCharts();
+            renderObjectives();
+            updateFileStatus(true);
+        }
+        
+        // Then, try to restore the file handle and load from file (to get latest version)
         const storedHandle = await retrieveFileHandle();
         if (storedHandle) {
             // Request permission to access the file
             const permission = await storedHandle.requestPermission({ mode: 'readwrite' });
             if (permission === 'granted') {
                 fileHandle = storedHandle;
-                await loadFromFile();
+                await loadFromFile(); // This will overwrite cached data with file data and update cache
                 updateDashboardCharts();
                 renderObjectives();
                 updateFileStatus(true);
                 return true;
             }
+        }
+        
+        // If we have cached data but no file handle, still return true to indicate we have data
+        if (cachedData) {
+            return true;
         }
     } catch (e) {
         console.log('Could not restore last file:', e.message);
@@ -406,15 +468,15 @@ function renderObjectives() {
                         <button class="btn-icon btn-delete" onclick="deleteObjective('${obj.id}')" title="Delete">🗑</button>
                     </div>
                 </div>
-                    <div class="objective-progress">
-                        <div class="progress-bar">
+                <div class="objective-progress">
+                    <div class="progress-bar">
                             <div class="progress-fill" style="width: ${progress}%; background: ${getProgressColor(progress)}"></div>
-                        </div>
-                        <div class="progress-text">
-                            <span>${obj.keyResults?.length || 0} Key Results</span>
-                            <span>${progress}% Complete</span>
-                        </div>
                     </div>
+                    <div class="progress-text">
+                        <span>${obj.keyResults?.length || 0} Key Results</span>
+                        <span>${progress}% Complete</span>
+                    </div>
+                </div>
                 ${obj.keyResults && obj.keyResults.length > 0 ? `
                     <div class="key-results">
                         <h4>Key Results</h4>
@@ -428,8 +490,8 @@ function renderObjectives() {
                                             <div class="kr-badges-row">
                                                 <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
                                                 <span class="kr-confidence-badge kr-confidence-${(kr.confidence || 'Medium').toLowerCase()}">Confidence: ${kr.confidence || 'Medium'}</span>
-                                                <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
-                                            </div>
+                                            <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
+                                                </div>
                                             <div class="kr-dates-row">
                                                 ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
                                                 ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
@@ -1507,18 +1569,18 @@ function exportToText() {
         
         if (obj.keyResults && obj.keyResults.length > 0) {
             text += '\nKey Results:\n';
-                obj.keyResults.forEach((kr, krIndex) => {
-                    const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
-                    text += `\n  ${krIndex + 1}. ${kr.title}\n`;
-                    text += `     Progress: ${kr.current}/${kr.target} (${krProgress}%)\n`;
+            obj.keyResults.forEach((kr, krIndex) => {
+                const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+                text += `\n  ${krIndex + 1}. ${kr.title}\n`;
+                text += `     Progress: ${kr.current}/${kr.target} (${krProgress}%)\n`;
                     text += `     Status: ${getStatusLabel(kr.status || 'on-track')}\n`;
                     text += `     Confidence: ${kr.confidence || 'Medium'}\n`;
                     text += `     Weight: ${kr.weight || 100}%\n`;
                     const krCreatedDate = kr.created || kr.createdAt;
                     text += `     Created: ${krCreatedDate ? formatDateOnly(krCreatedDate) : 'N/A'}\n`;
-                    if (kr.startDate && kr.targetDate) {
-                        text += `     Period: ${kr.startDate} → ${kr.targetDate}\n`;
-                    }
+                if (kr.startDate && kr.targetDate) {
+                    text += `     Period: ${kr.startDate} → ${kr.targetDate}\n`;
+                }
                     text += `     Last Check-in: ${kr.lastCheckin || 'N/A'}\n`;
                     if (kr.evidence) {
                         text += `     Evidence:\n${kr.evidence.split('\n').map(line => `        ${line}`).join('\n')}\n`;
@@ -1526,7 +1588,7 @@ function exportToText() {
                     if (kr.comments) {
                         text += `     Comments:\n${kr.comments.split('\n').map(line => `        ${line}`).join('\n')}\n`;
                     }
-                });
+            });
         }
         
         text += '\n' + '═'.repeat(60) + '\n\n';
