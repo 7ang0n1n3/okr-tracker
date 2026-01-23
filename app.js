@@ -496,10 +496,11 @@ function renderObjectives() {
                                                 ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
                                                 ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
                                                 ${kr.targetDate ? `<span class="kr-meta-item${getDateWarningClass(kr.targetDate)}">Target: ${kr.targetDate}</span>` : ''}
-                                                ${kr.lastCheckin ? `<span class="kr-meta-item ${isCheckinOverdue(kr.lastCheckin) ? 'kr-checkin-overdue' : ''}">Last Check-in: ${kr.lastCheckin}</span>` : ''}
+                                                ${kr.lastCheckin ? `<span class="kr-meta-item ${getCheckinDateClass(kr.lastCheckin)}">Last Check-in: ${kr.lastCheckin}</span>` : ''}
                                             </div>
                                         </div>
                                         <div class="kr-controls">
+                                            <button onclick="quickCheckin('${obj.id}', '${kr.id}')" title="Quick Check-in" class="btn-checkin">✓</button>
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease">−</button>
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', 10)" title="Increase">+</button>
                                             <button onclick="openKRModal('${obj.id}', '${kr.id}')" title="Edit">✎</button>
@@ -511,8 +512,16 @@ function renderObjectives() {
                                             ${kr.comments ? `<div class="kr-comments-section"><label class="kr-section-label">Comments:</label><div class="kr-comments-content">${escapeHtml(kr.comments)}</div></div>` : ''}
                                         </div>
                                         <div class="kr-progress-row">
-                                            <div class="kr-progress-bar">
-                                                <div class="kr-progress-fill" style="width: ${krProgress}%"></div>
+                                            <div class="kr-progress-slider-wrapper">
+                                                <div class="kr-progress-slider-fill" style="width: ${krProgress}%"></div>
+                                                <input type="range" 
+                                                       class="kr-progress-slider" 
+                                                       min="0" 
+                                                       max="${kr.target}" 
+                                                       value="${kr.current}" 
+                                                       step="1"
+                                                       oninput="updateSliderFill(this); setKRProgress('${obj.id}', '${kr.id}', this.value)"
+                                                       title="Drag to adjust progress">
                                             </div>
                                             <span class="kr-value">${kr.current} / ${kr.target}</span>
                                         </div>
@@ -597,7 +606,7 @@ function addHistoryEntry(type, itemType, itemId, itemTitle, changes, group = nul
     }
 }
 
-// Check if last check-in is 8 days or more ago
+// Check if last check-in is 8 days or more ago (deprecated, kept for backward compatibility)
 function isCheckinOverdue(checkinDate) {
     if (!checkinDate) return false;
     const today = new Date();
@@ -607,6 +616,25 @@ function isCheckinOverdue(checkinDate) {
     const diffTime = today - checkin;
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     return diffDays >= 8;
+}
+
+// Get check-in date color class based on weekly check-in requirement
+function getCheckinDateClass(checkinDate) {
+    if (!checkinDate) return 'kr-checkin-red'; // No check-in date means overdue
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkin = new Date(checkinDate);
+    checkin.setHours(0, 0, 0, 0);
+    const diffTime = today - checkin;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 7) {
+        // Date is within the last 7 days (weekly check-in is up to date) - green
+        return 'kr-checkin-green';
+    } else {
+        // Date is more than 7 days ago (overdue for weekly check-in) - red
+        return 'kr-checkin-red';
+    }
 }
 
 // Get date warning class based on target date proximity
@@ -983,6 +1011,78 @@ async function updateKR(objectiveId, krId, delta) {
             recordProgressSnapshot(); // Record snapshot before saving
             await saveToFile(); // Save including the snapshot
             renderObjectives();
+        }
+    }
+}
+
+// Update slider fill visually as user drags
+function updateSliderFill(slider) {
+    const wrapper = slider.closest('.kr-progress-slider-wrapper');
+    if (wrapper) {
+        const fill = wrapper.querySelector('.kr-progress-slider-fill');
+        if (fill) {
+            const max = parseFloat(slider.max);
+            const value = parseFloat(slider.value);
+            const percentage = max > 0 ? (value / max) * 100 : 0;
+            fill.style.width = percentage + '%';
+        }
+    }
+}
+
+// Set key result progress to absolute value (for slider)
+async function setKRProgress(objectiveId, krId, newValue) {
+    const objective = data.objectives.find(obj => obj.id === objectiveId);
+    if (objective) {
+        const kr = objective.keyResults.find(k => k.id === krId);
+        if (kr) {
+            const oldCurrent = kr.current;
+            const oldProgress = Math.min(100, Math.round((oldCurrent / kr.target) * 100));
+            kr.current = Math.max(0, Math.min(kr.target, Math.round(newValue)));
+            const newProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+            
+            // Track progress change in history
+            if (oldCurrent !== kr.current) {
+                const delta = kr.current - oldCurrent;
+                addHistoryEntry('progress', 'keyresult', krId, kr.title, {
+                    progress: {
+                        from: `${oldCurrent}/${kr.target} (${oldProgress}%)`,
+                        to: `${kr.current}/${kr.target} (${newProgress}%)`,
+                        delta: delta
+                    }
+                }, objective.group);
+            }
+            
+            recordProgressSnapshot(); // Record snapshot before saving
+            await saveToFile(); // Save including the snapshot
+            renderObjectives();
+        }
+    }
+}
+
+// Quick check-in: update last check-in date to today
+async function quickCheckin(objectiveId, krId) {
+    const objective = data.objectives.find(obj => obj.id === objectiveId);
+    if (objective) {
+        const kr = objective.keyResults.find(k => k.id === krId);
+        if (kr) {
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            const oldCheckin = kr.lastCheckin || '';
+            
+            if (oldCheckin !== today) {
+                kr.lastCheckin = today;
+                
+                // Track check-in change in history
+                addHistoryEntry('updated', 'keyresult', krId, kr.title, {
+                    lastCheckin: {
+                        from: oldCheckin || 'Never',
+                        to: today
+                    }
+                }, objective.group);
+                
+                recordProgressSnapshot(); // Record snapshot before saving
+                await saveToFile(); // Save including the snapshot
+                renderObjectives();
+            }
         }
     }
 }

@@ -648,6 +648,24 @@ button:active {
     color: #ef4444;
 }
 
+.kr-meta-item.kr-checkin-green {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: #22c55e;
+    color: #22c55e;
+}
+
+.kr-meta-item.kr-checkin-yellow {
+    background: rgba(234, 179, 8, 0.2);
+    border-color: #eab308;
+    color: #eab308;
+}
+
+.kr-meta-item.kr-checkin-red {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
 .date-warning-yellow {
     background: rgba(234, 179, 8, 0.2);
     border-color: #eab308;
@@ -745,6 +763,89 @@ button:active {
     background: var(--success);
     border-radius: 3px;
     transition: width 0.3s ease;
+}
+
+.kr-progress-slider-wrapper {
+    flex: 1;
+    position: relative;
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+}
+
+.kr-progress-slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: var(--success);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.kr-progress-slider {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 6px;
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+    z-index: 2;
+}
+
+.kr-progress-slider::-webkit-slider-track {
+    width: 100%;
+    height: 6px;
+    background: transparent;
+    border-radius: 3px;
+}
+
+.kr-progress-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--success);
+    border-radius: 50%;
+    cursor: pointer;
+    margin-top: -5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.kr-progress-slider::-webkit-slider-thumb:hover {
+    background: var(--primary);
+    transform: scale(1.1);
+}
+
+.kr-progress-slider::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    background: transparent;
+    border-radius: 3px;
+}
+
+.kr-progress-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--success);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.kr-progress-slider::-moz-range-thumb:hover {
+    background: var(--primary);
+    transform: scale(1.1);
 }
 
 .kr-value {

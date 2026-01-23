@@ -18,7 +18,8 @@ OKR Tracker is an offline-capable web application that stores your OKR data in a
 - **Status Management**: Track key results with status indicators (On Track, Off Track, At Risk)
 - **Confidence Levels**: Set confidence levels (Low, Medium, High) for key results to indicate likelihood of achievement
 - **Evidence and Comments**: Document progress with evidence and comments for each key result
-- **Check-in Dates**: Track last check-in dates for objectives and key results
+- **Check-in Dates**: Track last check-in dates for objectives and key results with weekly check-in reminders
+- **Quick Check-in**: One-click button to update check-in date to today
 - **Weight Balancing**: Automatic weight distribution for objectives and key results
 - **Export Reports**: Generate formatted text reports of your OKRs
 - **Filtering**: Click on dashboard charts to filter objectives by group
@@ -77,9 +78,20 @@ The application will remember your last opened file and attempt to restore it wh
 
 ### Updating Progress
 
+- **Drag the progress slider** to directly set the progress value (0 to target value) - the most intuitive way to update progress
+- Use the "-" and "+" buttons on each key result to decrease or increase progress by 10 points
+- Progress is automatically calculated based on current value vs. target value
+- The progress slider updates in real-time as you drag
+
 - Use the "-" and "+" buttons on each key result to decrease or increase progress by 10 points
 - Progress is automatically calculated based on current value vs. target value
 - The progress bar updates in real-time
+
+### Quick Check-in
+
+- Click the "✓" button on any key result to quickly update the last check-in date to today
+- This is useful for maintaining weekly check-ins without opening the edit modal
+- The check-in date color will update automatically based on the weekly check-in status
 
 ### Editing and Deleting
 
@@ -195,7 +207,17 @@ Both Objective Due Date badges and Key Result Target Date badges use color codin
 - **Red Badge**: Past the target/due date
   - Indicates the deadline has passed and the item is overdue
 
-Additionally, Key Result Last Check-in badges will turn red if 8 days or more have passed since the last check-in date, indicating that the key result needs to be reviewed.
+### Weekly Check-in Status
+
+Key Result Last Check-in badges use color coding to indicate weekly check-in status:
+
+- **Green Badge**: Check-in date is within the last 7 days (weekly check-in is up to date)
+  - Indicates the key result has been reviewed recently and is on track for weekly check-ins
+
+- **Red Badge**: Check-in date is more than 7 days ago, or no check-in date exists
+  - Indicates the key result is overdue for a weekly check-in and needs to be reviewed
+
+The weekly check-in system helps ensure regular review and accountability for all key results. Use the quick check-in button (✓) to easily update the check-in date to today.
 
 ## Weight Balancing
 
@@ -258,7 +280,7 @@ If you clear your browser's cache or IndexedDB data:
 
 1. **Keep Objectives Focused**: Limit yourself to 3-5 objectives per quarter
 2. **Set Measurable Key Results**: Each objective should have 2-5 key results with specific, quantifiable targets
-3. **Regular Check-ins**: Update your last check-in dates weekly to maintain accountability
+3. **Regular Check-ins**: Use the quick check-in button (✓) to update check-in dates weekly. The color-coded badges will help you identify which key results need attention.
 4. **Use Evidence**: Document your progress with evidence to track what's working
 5. **Review Status**: Regularly update key result status to reflect current reality
 6. **Set Confidence Levels**: Use confidence indicators to identify which key results may need more attention
