@@ -500,7 +500,7 @@ function renderObjectives() {
                                             </div>
                                         </div>
                                         <div class="kr-controls">
-                                            <button onclick="quickCheckin('${obj.id}', '${kr.id}')" title="Quick Check-in" class="btn-checkin">✓</button>
+                                            <button onclick="quickCheckin('${obj.id}', '${kr.id}', this)" title="Quick Check-in" class="btn-checkin">✓</button>
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease">−</button>
                                             <button onclick="updateKR('${obj.id}', '${kr.id}', 10)" title="Increase">+</button>
                                             <button onclick="openKRModal('${obj.id}', '${kr.id}')" title="Edit">✎</button>
@@ -1060,30 +1060,69 @@ async function setKRProgress(objectiveId, krId, newValue) {
 }
 
 // Quick check-in: update last check-in date to today
-async function quickCheckin(objectiveId, krId) {
-    const objective = data.objectives.find(obj => obj.id === objectiveId);
-    if (objective) {
-        const kr = objective.keyResults.find(k => k.id === krId);
-        if (kr) {
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-            const oldCheckin = kr.lastCheckin || '';
-            
-            if (oldCheckin !== today) {
-                kr.lastCheckin = today;
-                
-                // Track check-in change in history
-                addHistoryEntry('updated', 'keyresult', krId, kr.title, {
-                    lastCheckin: {
-                        from: oldCheckin || 'Never',
-                        to: today
-                    }
-                }, objective.group);
-                
-                recordProgressSnapshot(); // Record snapshot before saving
-                await saveToFile(); // Save including the snapshot
-                renderObjectives();
-            }
+// Helper function to get local date in YYYY-MM-DD format
+function getLocalDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+async function quickCheckin(objectiveId, krId, buttonElement = null) {
+    try {
+        const objective = data.objectives.find(obj => obj.id === objectiveId);
+        if (!objective) {
+            console.error('Objective not found:', objectiveId);
+            return;
         }
+        
+        const kr = objective.keyResults.find(k => k.id === krId);
+        if (!kr) {
+            console.error('Key Result not found:', krId);
+            return;
+        }
+        
+        const today = getLocalDateString(); // Use local date, not UTC
+        const oldCheckin = kr.lastCheckin || '';
+        
+        // Find button if not provided
+        const button = buttonElement || document.querySelector(`button[onclick*="quickCheckin('${objectiveId}', '${krId}')"]`);
+        
+        if (oldCheckin === today) {
+            // Already checked in today - provide visual feedback
+            if (button) {
+                button.style.opacity = '0.5';
+                setTimeout(() => {
+                    button.style.opacity = '1';
+                }, 500);
+            }
+            return; // Already checked in today
+        }
+        
+        kr.lastCheckin = today;
+        
+        // Track check-in change in history
+        addHistoryEntry('updated', 'keyresult', krId, kr.title, {
+            lastCheckin: {
+                from: oldCheckin || 'Never',
+                to: today
+            }
+        }, objective.group);
+        
+        recordProgressSnapshot(); // Record snapshot before saving
+        await saveToFile(); // Save including the snapshot
+        renderObjectives();
+        
+        // Visual feedback for successful check-in
+        if (button) {
+            button.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                button.style.transform = 'scale(1)';
+            }, 200);
+        }
+    } catch (error) {
+        console.error('Error in quickCheckin:', error);
     }
 }
 
