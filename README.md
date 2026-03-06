@@ -1,6 +1,6 @@
 # OKR Tracker
 
-**Version 2.0.4**
+**Version 2.0.6**
 
 A offline or server hosted web-based application for tracking Objectives and Key Results (OKRs). This tool helps individuals and teams set, monitor, and achieve their goals using the OKR framework popularized by companies like Google, Intel, and LinkedIn.
 
@@ -15,7 +15,7 @@ OKR Tracker is an offline-capable web application that stores your OKR data in a
 - **File-Based Storage**: Data is stored in a local JSON file using the File System Access API
 - **Three Group Categories**: Organize objectives by Personal, Team, or Company
 - **Progress Tracking**: Visual progress indicators for objectives and key results
-- **Status Management**: Track key results with status indicators (On Track, Off Track, At Risk)
+- **Status Management**: Track key results with status indicators (On Track, Off Track, At Risk, Completed)
 - **Confidence Levels**: Set confidence levels (Low, Medium, High) for key results to indicate likelihood of achievement
 - **Evidence and Comments**: Document progress with evidence and comments for each key result
 - **Check-in Dates**: Track last check-in dates for objectives and key results with weekly check-in reminders
@@ -67,7 +67,7 @@ The application will remember your last opened file and attempt to restore it wh
    - **Key Result Title**: Description of the measurable outcome
    - **Target Value**: The target number to achieve
    - **Weight (%)**: Priority weight relative to other key results
-   - **Status**: On Track, Off Track, or At Risk
+   - **Status**: On Track, Off Track, At Risk, or Completed
    - **Confidence**: Low, Medium, or High (indicates your confidence in achieving this key result)
    - **Start Date**: When tracking begins
    - **Target Date**: The deadline
@@ -189,6 +189,7 @@ Each key result displays several badges:
   - **On Track (Green)**: Progress is meeting expectations
   - **Off Track (Yellow)**: Progress is below expectations, needs attention
   - **At Risk (Red)**: Progress is significantly behind, requires immediate action
+  - **Completed (Indigo)**: Key result has been achieved; update controls are locked
 
 - **Confidence Badge**: Shows your confidence level in achieving the key result
   - **Low**: Indicates uncertainty or significant challenges ahead

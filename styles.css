@@ -386,6 +386,112 @@ button:active {
     gap: 1.5rem;
 }
 
+.completed-objectives-section {
+    margin-top: 0.5rem;
+}
+
+.completed-objectives-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.85rem 1.25rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s, color 0.2s;
+}
+
+.completed-objectives-toggle:hover {
+    background: var(--bg-hover, var(--bg-secondary));
+    color: var(--text-primary);
+}
+
+.completed-toggle-icon {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+}
+
+.completed-count {
+    margin-left: auto;
+    background: var(--accent, #3b82f6);
+    color: #fff;
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.completed-objectives-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 1rem;
+    opacity: 0.85;
+}
+
+.completed-objectives-list[hidden] {
+    display: none;
+}
+
+/* KR-level completed accordion */
+.kr-completed-section {
+    margin-top: 0.75rem;
+}
+
+.kr-completed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: var(--bg-secondary, #1e293b);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s, color 0.2s;
+}
+
+.kr-completed-toggle:hover {
+    background: var(--bg-hover, var(--bg-card));
+    color: var(--text-primary);
+}
+
+.kr-completed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.kr-completed-list[hidden] {
+    display: none;
+}
+
+/* Locked KR styling */
+.kr-locked {
+    opacity: 0.7;
+}
+
+.kr-locked .kr-controls button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.kr-locked .kr-progress-slider:disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .objective-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -742,6 +848,15 @@ button:active {
 
 .kr-border-at-risk {
     border-left: 3px solid #ef4444;
+}
+
+.kr-status-completed {
+    background: #6366f1;
+    color: white;
+}
+
+.kr-border-completed {
+    border-left: 3px solid #6366f1;
 }
 
 .kr-progress-row {

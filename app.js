@@ -93,10 +93,10 @@ async function saveToFile() {
         await writable.close();
         // Save to localStorage after saving to file
         saveToLocalStorage();
-        updateFileStatus(true);
+        updateFileStatus();
     } catch (e) {
         console.error('Failed to save:', e);
-        updateFileStatus(false);
+        updateFileStatus();
     }
 }
 
@@ -112,7 +112,7 @@ async function openFile() {
         await loadFromFile();
         updateDashboardCharts();
         renderObjectives();
-        updateFileStatus(true);
+        updateFileStatus();
         setupChartClickHandlers();
         // Store file handle for next session
         await storeFileHandle();
@@ -137,7 +137,7 @@ async function createFile() {
         await saveToFile();
         updateDashboardCharts();
         renderObjectives();
-        updateFileStatus(true);
+        updateFileStatus();
         setupChartClickHandlers();
         // Store file handle for next session
         await storeFileHandle();
@@ -202,7 +202,7 @@ async function tryRestoreLastFile() {
             data = cachedData;
             updateDashboardCharts();
             renderObjectives();
-            updateFileStatus(true);
+            updateFileStatus();
         }
         
         // Then, try to restore the file handle and load from file (to get latest version)
@@ -215,7 +215,7 @@ async function tryRestoreLastFile() {
                 await loadFromFile(); // This will overwrite cached data with file data and update cache
                 updateDashboardCharts();
                 renderObjectives();
-                updateFileStatus(true);
+                updateFileStatus();
                 return true;
             }
         }
@@ -231,7 +231,7 @@ async function tryRestoreLastFile() {
 }
 
 // Update file status indicator
-function updateFileStatus(connected) {
+function updateFileStatus() {
     const fileName = document.getElementById('file-name');
     if (fileHandle) {
         fileName.textContent = fileHandle.name;
@@ -316,30 +316,32 @@ function filterByGroup(group) {
 
 // Generate unique ID
 function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
-// Calculate objective progress based on key results
+// Calculate objective progress based on key results (weighted)
 function calculateProgress(objective) {
     if (!objective.keyResults || objective.keyResults.length === 0) {
         return 0;
     }
+    const totalWeight = objective.keyResults.reduce((sum, kr) => sum + (kr.weight || 100), 0);
+    if (totalWeight === 0) return 0;
     const total = objective.keyResults.reduce((sum, kr) => {
-        return sum + (kr.current / kr.target) * 100;
+        return sum + ((kr.current / kr.target) * 100) * ((kr.weight || 100) / totalWeight);
     }, 0);
-    return Math.min(100, Math.round(total / objective.keyResults.length));
+    return Math.min(100, Math.round(total));
 }
 
 // Record progress snapshot for trend tracking
 function recordProgressSnapshot() {
     if (!data.objectives || data.objectives.length === 0) return;
-    
+
     const timestamp = new Date().toISOString();
     const snapshot = {
         timestamp: timestamp,
         objectives: {}
     };
-    
+
     data.objectives.forEach(obj => {
         const progress = calculateProgress(obj);
         snapshot.objectives[obj.id] = {
@@ -348,10 +350,10 @@ function recordProgressSnapshot() {
             progress: progress,
             keyResults: {}
         };
-        
+
         if (obj.keyResults) {
             obj.keyResults.forEach(kr => {
-                const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+                const krProgress = getKRProgress(kr);
                 snapshot.objectives[obj.id].keyResults[kr.id] = {
                     title: kr.title,
                     progress: krProgress,
@@ -361,15 +363,92 @@ function recordProgressSnapshot() {
             });
         }
     });
-    
-    // Store in history as progress snapshot
+
     if (!data.history) {
         data.history = [];
     }
-    
-    // Always create a new snapshot entry to track progress changes over time
-    // This allows the chart to show progression even within the same day
+
+    // Deduplicate: if the most recent snapshot is within 5 minutes, update it in place
+    // rather than appending a new entry (prevents slider drags from flooding history)
+    const DEDUP_MS = 5 * 60 * 1000;
+    const lastEntry = data.history[0];
+    if (lastEntry && lastEntry.type === 'progress-snapshot' &&
+        (new Date(timestamp) - new Date(lastEntry.timestamp)) < DEDUP_MS) {
+        lastEntry.timestamp = timestamp;
+        lastEntry.changes.snapshot = snapshot;
+        return;
+    }
+
     addHistoryEntry('progress-snapshot', 'system', 'all', 'Progress Snapshot', { snapshot: snapshot }, null);
+}
+
+function getKRProgress(kr) {
+    return Math.min(100, Math.round((kr.current / kr.target) * 100));
+}
+
+function isKRComplete(kr) {
+    return kr.status === 'completed' || getKRProgress(kr) >= 100;
+}
+
+function toggleCollapsible(btn) {
+    const list = btn.nextElementSibling;
+    const icon = btn.querySelector('.completed-toggle-icon');
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!expanded));
+    icon.innerHTML = expanded ? '&#9654;' : '&#9660;';
+    list.hidden = expanded;
+}
+
+// Render a single key result item
+// locked=true disables all update controls (used for completed KRs)
+function renderKR(obj, kr, locked = false) {
+    const krProgress = getKRProgress(kr);
+    const status = kr.status || 'on-track';
+    const dis = locked ? ' disabled' : '';
+    return `
+        <div class="kr-item kr-border-${status}${locked ? ' kr-locked' : ''}" data-kr-id="${kr.id}">
+            <div class="kr-info-blocks">
+                <div class="kr-badges-row">
+                    <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
+                    <span class="kr-confidence-badge kr-confidence-${(kr.confidence || 'Medium').toLowerCase()}">Confidence: ${kr.confidence || 'Medium'}</span>
+                    <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
+                </div>
+                <div class="kr-dates-row">
+                    ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
+                    ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
+                    ${kr.targetDate ? `<span class="kr-meta-item${locked || krProgress >= 100 ? '' : getDateWarningClass(kr.targetDate)}">Target: ${kr.targetDate}</span>` : ''}
+                    ${kr.lastCheckin ? `<span class="kr-meta-item ${locked || krProgress >= 100 ? '' : getCheckinDateClass(kr.lastCheckin)}">Last Check-in: ${kr.lastCheckin}</span>` : ''}
+                </div>
+            </div>
+            <div class="kr-controls">
+                <button onclick="quickCheckin('${obj.id}', '${kr.id}', this)" title="Quick Check-in" class="btn-checkin"${dis}>✓</button>
+                <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease"${dis}>−</button>
+                <button onclick="updateKR('${obj.id}', '${kr.id}', 10)" title="Increase"${dis}>+</button>
+                <button onclick="openKRModal('${obj.id}', '${kr.id}')" title="Edit">✎</button>
+                <button class="btn-delete-kr" onclick="deleteKR('${obj.id}', '${kr.id}')" title="Delete">×</button>
+            </div>
+            <div class="kr-description">
+                <div class="kr-title">${escapeHtml(kr.title)}</div>
+                ${kr.evidence ? `<div class="kr-evidence-section"><label class="kr-section-label">Evidence:</label><div class="kr-evidence-content">${escapeHtml(kr.evidence)}</div></div>` : ''}
+                ${kr.comments ? `<div class="kr-comments-section"><label class="kr-section-label">Comments:</label><div class="kr-comments-content">${escapeHtml(kr.comments)}</div></div>` : ''}
+            </div>
+            <div class="kr-progress-row">
+                <div class="kr-progress-slider-wrapper">
+                    <div class="kr-progress-slider-fill" style="width: ${krProgress}%"></div>
+                    <input type="range"
+                           class="kr-progress-slider"
+                           min="0"
+                           max="${kr.target}"
+                           value="${kr.current}"
+                           step="1"
+                           oninput="updateSliderFill(this)"
+                           onchange="setKRProgress('${obj.id}', '${kr.id}', this.value)"
+                           title="Drag to adjust progress"${dis}>
+                </div>
+                <span class="kr-value">${kr.current} / ${kr.target}</span>
+            </div>
+        </div>
+    `;
 }
 
 // Render all objectives
@@ -416,125 +495,120 @@ function renderObjectives() {
         `;
         return;
     }
-    
-    container.innerHTML = filteredObjectives.map(obj => {
+
+    const active = [], completed = [];
+    for (const obj of filteredObjectives) {
         const progress = calculateProgress(obj);
-        // Check if objective is past due date or within due date
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const targetDate = obj.targetDate ? new Date(obj.targetDate) : null;
-        if (targetDate) {
-            targetDate.setHours(0, 0, 0, 0);
-        }
-        const isPastDue = targetDate && targetDate < today;
-        const isBeforeOrAtDueDate = targetDate && targetDate >= today;
-        
-        let overdueClass = '';
-        if (isPastDue && progress < 70) {
-            // Past due date and progress less than 70% - red outline
-            overdueClass = ' objective-overdue';
-        } else if (isPastDue && progress >= 70) {
-            // Past due date and progress 70% or higher - yellow outline
-            overdueClass = ' objective-overdue-yellow';
-        } else if (isBeforeOrAtDueDate && progress >= 70 && progress < 100) {
-            // Before or at due date and progress 70% or higher (but not 100%) - blue outline
-            overdueClass = ' objective-overdue-blue';
-        } else if (isBeforeOrAtDueDate && progress >= 100) {
-            // Before or at due date and progress at 100% - green outline
-            overdueClass = ' objective-overdue-complete';
-        }
-        return `
-            <div class="objective-card${overdueClass}" data-id="${obj.id}">
-                <div class="objective-header">
-                    <div class="objective-info">
-                        <div class="objective-meta">
-                            <span class="obj-badge obj-group-${(obj.group || 'Personal').toLowerCase()}">${obj.group || 'Personal'}</span>
-                            <span class="obj-badge">${obj.year || ''} Q${obj.quarter || ''}</span>
-                            <span class="obj-badge">${obj.weight || 100}%</span>
-                            ${(obj.created || obj.createdAt) ? `<span class="obj-badge">Created<br>${formatDateOnly(obj.created || obj.createdAt)}</span>` : ''}
-                            ${obj.startDate ? `<span class="obj-badge">Start Date<br>${obj.startDate}</span>` : ''}
-                            ${obj.targetDate ? `<span class="obj-badge${getDateWarningClass(obj.targetDate)}">Due Date<br>${obj.targetDate}</span>` : ''}
-                            ${obj.lastCheckin ? `<span class="obj-badge">Last Check-in<br>${obj.lastCheckin}</span>` : ''}
-                        </div>
-                        <div class="objective-content-box">
-                            <label class="box-label">Objective</label>
-                            <h3 class="objective-title">${escapeHtml(obj.title)}</h3>
-                        </div>
-                        ${obj.purpose ? `<div class="objective-content-box"><label class="box-label">Purpose</label><p class="objective-purpose">${escapeHtml(obj.purpose)}</p></div>` : ''}
-                    </div>
-                    <div class="objective-actions">
-                        <button class="btn-icon btn-add-kr" onclick="openKRModal('${obj.id}')" title="Add Key Result">+</button>
-                        <button class="btn-icon" onclick="openObjectiveModal('${obj.id}')" title="Edit">✎</button>
-                        <button class="btn-icon btn-delete" onclick="deleteObjective('${obj.id}')" title="Delete">🗑</button>
-                    </div>
+        (progress >= 100 ? completed : active).push({ obj, progress });
+    }
+
+    const activeHTML = active.map(({ obj, progress }) => renderObjectiveCard(obj, progress)).join('');
+
+    let completedHTML = '';
+    if (completed.length > 0) {
+        completedHTML = `
+            <div class="completed-objectives-section">
+                <button class="completed-objectives-toggle" onclick="toggleCollapsible(this)" aria-expanded="false">
+                    <span class="completed-toggle-icon">&#9654;</span>
+                    Completed Objectives
+                    <span class="completed-count">${completed.length}</span>
+                </button>
+                <div class="completed-objectives-list" hidden>
+                    ${completed.map(({ obj, progress }) => renderObjectiveCard(obj, progress)).join('')}
                 </div>
-                <div class="objective-progress">
-                    <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${progress}%; background: ${getProgressColor(progress)}"></div>
-                    </div>
-                    <div class="progress-text">
-                        <span>${obj.keyResults?.length || 0} Key Results</span>
-                        <span>${progress}% Complete</span>
-                    </div>
-                </div>
-                ${obj.keyResults && obj.keyResults.length > 0 ? `
-                    <div class="key-results">
-                        <h4>Key Results</h4>
-                        <div class="kr-list">
-                            ${obj.keyResults.map(kr => {
-                                const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
-                                const status = kr.status || 'on-track';
-                                return `
-                                    <div class="kr-item kr-border-${status}" data-kr-id="${kr.id}">
-                                        <div class="kr-info-blocks">
-                                            <div class="kr-badges-row">
-                                                <span class="kr-status-badge kr-status-${status}">${getStatusLabel(status)}</span>
-                                                <span class="kr-confidence-badge kr-confidence-${(kr.confidence || 'Medium').toLowerCase()}">Confidence: ${kr.confidence || 'Medium'}</span>
-                                            <span class="kr-weight-badge">Weight: ${kr.weight || 100}%</span>
-                                                </div>
-                                            <div class="kr-dates-row">
-                                                ${(kr.created || kr.createdAt) ? `<span class="kr-meta-item">Created: ${formatDateOnly(kr.created || kr.createdAt)}</span>` : ''}
-                                                ${kr.startDate ? `<span class="kr-meta-item">Start: ${kr.startDate}</span>` : ''}
-                                                ${kr.targetDate ? `<span class="kr-meta-item${getDateWarningClass(kr.targetDate)}">Target: ${kr.targetDate}</span>` : ''}
-                                                ${kr.lastCheckin ? `<span class="kr-meta-item ${getCheckinDateClass(kr.lastCheckin)}">Last Check-in: ${kr.lastCheckin}</span>` : ''}
-                                            </div>
-                                        </div>
-                                        <div class="kr-controls">
-                                            <button onclick="quickCheckin('${obj.id}', '${kr.id}', this)" title="Quick Check-in" class="btn-checkin">✓</button>
-                                            <button onclick="updateKR('${obj.id}', '${kr.id}', -10)" title="Decrease">−</button>
-                                            <button onclick="updateKR('${obj.id}', '${kr.id}', 10)" title="Increase">+</button>
-                                            <button onclick="openKRModal('${obj.id}', '${kr.id}')" title="Edit">✎</button>
-                                            <button class="btn-delete-kr" onclick="deleteKR('${obj.id}', '${kr.id}')" title="Delete">×</button>
-                                        </div>
-                                        <div class="kr-description">
-                                            <div class="kr-title">${escapeHtml(kr.title)}</div>
-                                            ${kr.evidence ? `<div class="kr-evidence-section"><label class="kr-section-label">Evidence:</label><div class="kr-evidence-content">${escapeHtml(kr.evidence)}</div></div>` : ''}
-                                            ${kr.comments ? `<div class="kr-comments-section"><label class="kr-section-label">Comments:</label><div class="kr-comments-content">${escapeHtml(kr.comments)}</div></div>` : ''}
-                                        </div>
-                                        <div class="kr-progress-row">
-                                            <div class="kr-progress-slider-wrapper">
-                                                <div class="kr-progress-slider-fill" style="width: ${krProgress}%"></div>
-                                                <input type="range" 
-                                                       class="kr-progress-slider" 
-                                                       min="0" 
-                                                       max="${kr.target}" 
-                                                       value="${kr.current}" 
-                                                       step="1"
-                                                       oninput="updateSliderFill(this); setKRProgress('${obj.id}', '${kr.id}', this.value)"
-                                                       title="Drag to adjust progress">
-                                            </div>
-                                            <span class="kr-value">${kr.current} / ${kr.target}</span>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-                ` : ''}
             </div>
         `;
-    }).join('');
+    }
+
+    container.innerHTML = activeHTML + completedHTML;
 }
+
+
+function renderObjectiveCard(obj, progress = calculateProgress(obj)) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const targetDate = obj.targetDate ? new Date(obj.targetDate) : null;
+    if (targetDate) {
+        targetDate.setHours(0, 0, 0, 0);
+    }
+    const isPastDue = targetDate && targetDate < today;
+    const isBeforeOrAtDueDate = targetDate && targetDate >= today;
+
+    let overdueClass = '';
+    if (isPastDue && progress < 70) {
+        overdueClass = ' objective-overdue';
+    } else if (isPastDue && progress >= 70) {
+        overdueClass = ' objective-overdue-yellow';
+    } else if (isBeforeOrAtDueDate && progress >= 70 && progress < 100) {
+        overdueClass = ' objective-overdue-blue';
+    } else if (progress >= 100) {
+        overdueClass = ' objective-overdue-complete';
+    }
+
+    const activeKRs = [], completedKRs = [];
+    for (const kr of (obj.keyResults || [])) {
+        (isKRComplete(kr) ? completedKRs : activeKRs).push(kr);
+    }
+
+    // NOTE: all user-supplied values go through escapeHtml() before insertion
+    return `
+        <div class="objective-card${overdueClass}" data-id="${obj.id}">
+            <div class="objective-header">
+                <div class="objective-info">
+                    <div class="objective-meta">
+                        <span class="obj-badge obj-group-${(obj.group || 'Personal').toLowerCase()}">${obj.group || 'Personal'}</span>
+                        <span class="obj-badge">${obj.year || ''} Q${obj.quarter || ''}</span>
+                        <span class="obj-badge">${obj.weight || 100}%</span>
+                        ${(obj.created || obj.createdAt) ? `<span class="obj-badge">Created<br>${formatDateOnly(obj.created || obj.createdAt)}</span>` : ''}
+                        ${obj.startDate ? `<span class="obj-badge">Start Date<br>${obj.startDate}</span>` : ''}
+                        ${obj.targetDate ? `<span class="obj-badge${getDateWarningClass(obj.targetDate)}">Due Date<br>${obj.targetDate}</span>` : ''}
+                        ${obj.lastCheckin ? `<span class="obj-badge">Last Check-in<br>${obj.lastCheckin}</span>` : ''}
+                    </div>
+                    <div class="objective-content-box">
+                        <label class="box-label">Objective</label>
+                        <h3 class="objective-title">${escapeHtml(obj.title)}</h3>
+                    </div>
+                    ${obj.purpose ? `<div class="objective-content-box"><label class="box-label">Purpose</label><p class="objective-purpose">${escapeHtml(obj.purpose)}</p></div>` : ''}
+                </div>
+                <div class="objective-actions">
+                    <button class="btn-icon btn-add-kr" onclick="openKRModal('${obj.id}')" title="Add Key Result">+</button>
+                    <button class="btn-icon" onclick="openObjectiveModal('${obj.id}')" title="Edit">&#9998;</button>
+                    <button class="btn-icon btn-delete" onclick="deleteObjective('${obj.id}')" title="Delete">&#128465;</button>
+                </div>
+            </div>
+            <div class="objective-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${progress}%; background: ${getProgressColor(progress)}"></div>
+                </div>
+                <div class="progress-text">
+                    <span>${obj.keyResults?.length || 0} Key Results</span>
+                    <span>${progress}% Complete</span>
+                </div>
+            </div>
+            ${activeKRs.length > 0 || completedKRs.length > 0 ? `
+                <div class="key-results">
+                    <h4>Key Results</h4>
+                    <div class="kr-list">
+                        ${activeKRs.map(kr => renderKR(obj, kr, false)).join('')}
+                    </div>
+                    ${completedKRs.length > 0 ? `
+                        <div class="kr-completed-section">
+                            <button class="kr-completed-toggle" onclick="toggleCollapsible(this)" aria-expanded="false">
+                                <span class="completed-toggle-icon">&#9654;</span>
+                                Completed Key Results
+                                <span class="completed-count">${completedKRs.length}</span>
+                            </button>
+                            <div class="kr-completed-list" hidden>
+                                ${completedKRs.map(kr => renderKR(obj, kr, true)).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
 
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
@@ -576,7 +650,8 @@ function getStatusLabel(status) {
     const labels = {
         'on-track': 'On Track',
         'off-track': 'Off Track',
-        'at-risk': 'At Risk'
+        'at-risk': 'At Risk',
+        'completed': 'Completed'
     };
     return labels[status] || 'On Track';
 }
@@ -629,10 +704,13 @@ function getCheckinDateClass(checkinDate) {
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays <= 7) {
-        // Date is within the last 7 days (weekly check-in is up to date) - green
+        // Within the last 7 days — up to date
         return 'kr-checkin-green';
+    } else if (diffDays <= 14) {
+        // 8–14 days — getting stale
+        return 'kr-checkin-yellow';
     } else {
-        // Date is more than 7 days ago (overdue for weekly check-in) - red
+        // More than 14 days — overdue
         return 'kr-checkin-red';
     }
 }
@@ -1145,8 +1223,6 @@ async function deleteKR(objectiveId, krId) {
 
 // Open progress trends modal
 function openProgressTrendsModal() {
-    // Set up event listeners before rendering
-    setupProgressTrendsFilters();
     renderProgressTrends();
     document.getElementById('progress-trends-modal').classList.add('active');
 }
@@ -1568,20 +1644,11 @@ function renderHistory() {
     const container = document.getElementById('history-list');
     if (!container) return;
     
-    if (!data.history || data.history.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <span>📊</span>
-                <p>No history available yet. Changes will be tracked as you work with your OKRs.</p>
-            </div>
-        `;
-        return;
-    }
-    
     const filterType = document.getElementById('history-filter-type')?.value || 'all';
     const filterGroup = document.getElementById('history-filter-group')?.value || 'all';
-    
-    let filteredHistory = data.history;
+
+    // Exclude internal snapshot entries from the user-facing history view
+    let filteredHistory = data.history.filter(entry => entry.type !== 'progress-snapshot');
     
     if (filterType !== 'all') {
         filteredHistory = filteredHistory.filter(entry => entry.itemType === filterType);
@@ -1592,12 +1659,21 @@ function renderHistory() {
     }
     
     if (filteredHistory.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <span>📊</span>
-                <p>No history matches the selected filters.</p>
-            </div>
-        `;
+        if (filterType === 'all' && filterGroup === 'all') {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <span>📊</span>
+                    <p>No history available yet. Changes will be tracked as you work with your OKRs.</p>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <span>📊</span>
+                    <p>No history matches the selected filters.</p>
+                </div>
+            `;
+        }
         return;
     }
     
@@ -1709,7 +1785,7 @@ function exportToText() {
         if (obj.keyResults && obj.keyResults.length > 0) {
             text += '\nKey Results:\n';
             obj.keyResults.forEach((kr, krIndex) => {
-                const krProgress = Math.min(100, Math.round((kr.current / kr.target) * 100));
+                const krProgress = getKRProgress(kr);
                 text += `\n  ${krIndex + 1}. ${kr.title}\n`;
                 text += `     Progress: ${kr.current}/${kr.target} (${krProgress}%)\n`;
                     text += `     Status: ${getStatusLabel(kr.status || 'on-track')}\n`;
@@ -1797,7 +1873,6 @@ document.getElementById('btn-balance-krs').addEventListener('click', () => {
     const objectiveId = document.getElementById('kr-objective-id').value;
     if (objectiveId) {
         balanceKRWeights(objectiveId);
-        closeModal();
     }
 });
 
@@ -1868,27 +1943,19 @@ if (!isFileSystemSupported) {
     `;
     document.getElementById('btn-open-file').disabled = true;
     document.getElementById('btn-new-file').disabled = true;
-    updateFileStatus(false);
+    updateFileStatus();
 } else {
+    // Set up filter listeners once at startup
+    setupChartClickHandlers();
+    setupHistoryFilters();
+    setupProgressTrendsFilters();
     // Try to restore last file, otherwise show empty state
     tryRestoreLastFile().then(restored => {
         if (!restored) {
             renderObjectives();
-            updateFileStatus(false);
+            updateFileStatus();
         }
-        // Set up chart click handlers after initial render
-        setupChartClickHandlers();
-        setupHistoryFilters();
-        setupProgressTrendsFilters();
-        // Record initial progress snapshot
+        // Record initial progress snapshot after data is loaded
         recordProgressSnapshot();
     });
-    // Also set up handlers if file is already restored
-    setupChartClickHandlers();
-    setupHistoryFilters();
-    setupProgressTrendsFilters();
-    // Record initial progress snapshot if data exists
-    if (data && data.objectives && data.objectives.length > 0) {
-        recordProgressSnapshot();
-    }
 }
